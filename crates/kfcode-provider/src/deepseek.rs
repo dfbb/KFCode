@@ -1,3 +1,4 @@
+//! DeepSeek provider implementation using the OpenAI-compatible chat completions API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -8,6 +9,7 @@ use crate::{
 
 const DEEPSEEK_API_URL: &str = "https://api.deepseek.com/chat/completions";
 
+/// Provider implementation for DeepSeek.
 #[derive(Debug)]
 pub struct DeepSeekProvider {
     client: Client,
@@ -16,6 +18,7 @@ pub struct DeepSeekProvider {
 }
 
 impl DeepSeekProvider {
+    /// Create a provider with the given API key.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: Client::new(),

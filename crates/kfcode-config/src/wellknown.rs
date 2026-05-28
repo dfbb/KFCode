@@ -1,3 +1,6 @@
+//! Fetches remote configuration from `.well-known/kfcode` endpoints.
+//! Results are cached in-process for 5 minutes to avoid repeated network calls.
+
 use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -7,7 +10,9 @@ use std::time::{Duration, Instant};
 
 use crate::Config;
 
+/// HTTP request timeout for well-known endpoint fetches, in seconds.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long a cached well-known response remains valid, in seconds.
 const CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
 
 /// The JSON shape returned by `{url}/.well-known/kfcode`.
@@ -42,6 +47,7 @@ struct CacheEntry {
 }
 
 static CACHE: Mutex<Option<HashMap<String, CacheEntry>>> = Mutex::new(None);
+
 /// Returns the path to `auth.json` inside the kfcode data directory.
 fn auth_json_path() -> PathBuf {
     let data_dir = dirs::data_dir()

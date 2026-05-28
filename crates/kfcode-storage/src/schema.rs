@@ -1,3 +1,5 @@
+//! SQL DDL statements and the ordered migration slice applied at database startup.
+
 // ============================================================================
 // SQLite Schema Definitions
 // Based on TypeScript: /kfcode/packages/kfcode/src/session/session.sql.ts

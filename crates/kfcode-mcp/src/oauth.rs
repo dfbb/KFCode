@@ -51,25 +51,34 @@ pub struct McpOAuthManager {
     pending: RwLock<Option<PendingAuth>>,
 }
 
+/// Errors that can occur during the OAuth authorization or token-refresh flow.
 #[derive(Debug, thiserror::Error)]
 pub enum OAuthError {
+    /// The OAuth configuration is invalid or incomplete.
     #[error("OAuth configuration error: {0}")]
     Config(String),
+    /// The authorization-code exchange with the token endpoint failed.
     #[error("Token exchange failed: {0}")]
     TokenExchange(String),
+    /// The refresh-token exchange with the token endpoint failed.
     #[error("Token refresh failed: {0}")]
     TokenRefresh(String),
+    /// `finish_auth` was called but no in-progress flow was found.
     #[error("No pending auth flow")]
     NoPendingAuth,
+    /// The `state` parameter returned by the server did not match the stored value.
     #[error("CSRF state mismatch")]
     StateMismatch,
+    /// A token refresh was attempted but no refresh token is stored.
     #[error("No refresh token available")]
     NoRefreshToken,
+    /// A credential read or write to the auth store failed.
     #[error("Storage error: {0}")]
     Storage(#[from] std::io::Error),
 }
 
 impl McpOAuthManager {
+    /// Create a new manager for the given MCP server name, URL, and OAuth config.
     pub fn new(mcp_name: String, server_url: String, config: McpOAuthConfig) -> Self {
         Self {
             mcp_name,
@@ -351,10 +360,12 @@ impl McpOAuthManager {
         }
     }
 
+    /// Return the MCP server name this manager was created for.
     pub fn mcp_name(&self) -> &str {
         &self.mcp_name
     }
 
+    /// Return the server URL this manager was created for.
     pub fn server_url(&self) -> &str {
         &self.server_url
     }
@@ -363,8 +374,11 @@ impl McpOAuthManager {
 /// High-level authentication status for an MCP server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthStatus {
+    /// Valid tokens are stored and not expired.
     Authenticated,
+    /// Tokens are stored but the access token has expired.
     Expired,
+    /// No tokens are stored for this server.
     NotAuthenticated,
 }
 
@@ -374,12 +388,14 @@ pub struct OAuthRegistry {
 }
 
 impl OAuthRegistry {
+    /// Create an empty registry.
     pub fn new() -> Self {
         Self {
             managers: RwLock::new(HashMap::new()),
         }
     }
 
+    /// Add a manager to the registry and return a shared reference to it.
     pub async fn register(&self, manager: McpOAuthManager) -> Arc<McpOAuthManager> {
         let name = manager.mcp_name().to_string();
         let arc = Arc::new(manager);
@@ -387,10 +403,12 @@ impl OAuthRegistry {
         arc
     }
 
+    /// Look up a manager by MCP server name.
     pub async fn get(&self, mcp_name: &str) -> Option<Arc<McpOAuthManager>> {
         self.managers.read().await.get(mcp_name).cloned()
     }
 
+    /// Remove a manager from the registry.
     pub async fn remove(&self, mcp_name: &str) {
         self.managers.write().await.remove(mcp_name);
     }

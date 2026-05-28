@@ -132,6 +132,7 @@ pub enum LogprobsSetting {
 }
 
 impl LogprobsSetting {
+    /// Return the number of top log-probability entries to include, or `None` if disabled.
     pub fn top_logprobs(&self) -> Option<u8> {
         match self {
             LogprobsSetting::Enabled(true) => Some(TOP_LOGPROBS_MAX),
@@ -141,6 +142,7 @@ impl LogprobsSetting {
     }
 }
 
+/// Maximum number of top log-probability entries returned when logprobs are enabled.
 pub const TOP_LOGPROBS_MAX: u8 = 20;
 
 // ---------------------------------------------------------------------------
@@ -157,10 +159,14 @@ pub struct ResponsesModelConfig {
     pub supports_priority_processing: bool,
 }
 
+/// How system messages are handled for a given model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemMessageMode {
+    /// Pass system messages as-is with role "system".
     System,
+    /// Remap system messages to role "developer".
     Developer,
+    /// Drop system messages entirely.
     Remove,
 }
 
@@ -258,14 +264,21 @@ pub fn map_openai_compatible_finish_reason(finish_reason: Option<&str>) -> Finis
     }
 }
 
+/// Reason a Responses API stream or completion finished.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FinishReason {
+    /// The model stopped naturally.
     Stop,
+    /// The output was truncated at the token limit.
     Length,
+    /// The output was blocked by a content filter.
     ContentFilter,
+    /// The model invoked one or more tools.
     ToolCalls,
+    /// An error occurred.
     Error,
+    /// The finish reason is not recognized.
     Unknown,
 }
 
@@ -292,6 +305,7 @@ pub enum ResponsesInputItem {
 /// tagged and untagged variants. Use `serde_json::Value` as the wire type.
 pub type ResponsesInput = Vec<serde_json::Value>;
 
+/// A role-based message in the Responses API input (system, developer, user, or assistant).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesRoleMessage {
     pub role: String, // "system" | "developer" | "user" | "assistant"
@@ -300,6 +314,7 @@ pub struct ResponsesRoleMessage {
     pub id: Option<String>,
 }
 
+/// A function call item in the Responses API input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesFunctionCall {
     #[serde(rename = "type")]
@@ -311,6 +326,7 @@ pub struct ResponsesFunctionCall {
     pub id: Option<String>,
 }
 
+/// The output of a function call in the Responses API input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesFunctionCallOutput {
     #[serde(rename = "type")]
@@ -319,6 +335,7 @@ pub struct ResponsesFunctionCallOutput {
     pub output: String,
 }
 
+/// A local shell call item in the Responses API input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesLocalShellCall {
     #[serde(rename = "type")]
@@ -328,6 +345,7 @@ pub struct ResponsesLocalShellCall {
     pub action: LocalShellAction,
 }
 
+/// The exec action payload for a local shell call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalShellAction {
     #[serde(rename = "type")]
@@ -343,6 +361,7 @@ pub struct LocalShellAction {
     pub env: Option<HashMap<String, String>>,
 }
 
+/// The output of a local shell call in the Responses API input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesLocalShellCallOutput {
     #[serde(rename = "type")]
@@ -351,6 +370,7 @@ pub struct ResponsesLocalShellCallOutput {
     pub output: String,
 }
 
+/// A reasoning item in the Responses API input, carrying encrypted content and summary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesReasoning {
     #[serde(rename = "type")]
@@ -361,6 +381,7 @@ pub struct ResponsesReasoning {
     pub summary: Vec<ReasoningSummaryText>,
 }
 
+/// A single summary text block within a reasoning item.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningSummaryText {
     #[serde(rename = "type")]
@@ -368,6 +389,7 @@ pub struct ReasoningSummaryText {
     pub text: String,
 }
 
+/// A reference to a previously created response item by ID.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsesItemReference {
     #[serde(rename = "type")]
@@ -390,12 +412,14 @@ pub struct ResponsesUsage {
     pub output_tokens_details: Option<OutputTokensDetails>,
 }
 
+/// Breakdown of input token counts.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InputTokensDetails {
     #[serde(default)]
     pub cached_tokens: Option<u64>,
 }
 
+/// Breakdown of output token counts.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OutputTokensDetails {
     #[serde(default)]
@@ -515,6 +539,7 @@ pub enum ResponsesStreamChunk {
 // Sub-types for streaming chunks
 // ---------------------------------------------------------------------------
 
+/// A single log-probability entry for a generated token.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogprobEntry {
     pub token: String,
@@ -522,12 +547,14 @@ pub struct LogprobEntry {
     pub top_logprobs: Vec<TopLogprob>,
 }
 
+/// A candidate token and its log-probability.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopLogprob {
     pub token: String,
     pub logprob: f64,
 }
 
+/// Metadata from the `response.created` event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseCreatedData {
     pub id: String,
@@ -537,6 +564,7 @@ pub struct ResponseCreatedData {
     pub service_tier: Option<String>,
 }
 
+/// Metadata from the `response.completed` or `response.incomplete` event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseFinishedData {
     #[serde(default)]
@@ -546,6 +574,7 @@ pub struct ResponseFinishedData {
     pub service_tier: Option<String>,
 }
 
+/// Details about why a response was incomplete.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IncompleteDetails {
     pub reason: String,
@@ -657,6 +686,7 @@ pub enum OutputItemDoneItem {
     },
 }
 
+/// Output from the code interpreter tool (logs or image).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CodeInterpreterOutput {
@@ -666,6 +696,7 @@ pub enum CodeInterpreterOutput {
     Image { url: String },
 }
 
+/// A single file search result returned by the file search tool.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileSearchResult {
     #[serde(default)]
@@ -710,6 +741,7 @@ pub struct OngoingToolCall {
     pub code_interpreter: Option<CodeInterpreterState>,
 }
 
+/// State for an in-progress code interpreter call during streaming.
 #[derive(Debug, Clone)]
 pub struct CodeInterpreterState {
     pub container_id: String,
@@ -939,10 +971,14 @@ pub fn validate_responses_settings(
 // OpenAI Responses Runtime
 // ---------------------------------------------------------------------------
 
+/// A function type alias for building request URLs from path and model ID.
 pub type UrlBuilder = Arc<dyn Fn(&str, &str) -> String + Send + Sync>;
+/// A function type alias for building request headers.
 pub type HeadersBuilder = Arc<dyn Fn() -> HashMap<String, String> + Send + Sync>;
+/// A function type alias for generating unique IDs.
 pub type IdGenerator = Arc<dyn Fn() -> String + Send + Sync>;
 
+/// Runtime configuration for the OpenAI Responses API language model.
 #[derive(Clone)]
 pub struct OpenAIResponsesConfig {
     pub provider: String,
@@ -977,6 +1013,7 @@ impl Default for OpenAIResponsesConfig {
     }
 }
 
+/// A language model instance backed by the OpenAI Responses API.
 #[derive(Clone)]
 pub struct OpenAIResponsesLanguageModel {
     pub model_id: String,
@@ -992,6 +1029,7 @@ impl std::fmt::Debug for OpenAIResponsesLanguageModel {
     }
 }
 
+/// Options for a single generate call to the Responses API.
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {
     pub prompt: Vec<Message>,
@@ -1009,11 +1047,13 @@ pub struct GenerateOptions {
     pub response_format: Option<Value>,
 }
 
+/// Options for a streaming generate call to the Responses API.
 #[derive(Debug, Clone, Default)]
 pub struct StreamOptions {
     pub generate: GenerateOptions,
 }
 
+/// Prepared request body and warnings for a Responses API call.
 #[derive(Debug, Clone)]
 pub struct PreparedArgs {
     pub web_search_tool_name: Option<String>,
@@ -1021,6 +1061,7 @@ pub struct PreparedArgs {
     pub warnings: Vec<CallWarning>,
 }
 
+/// The result of a completed Responses API generate call.
 #[derive(Debug, Clone)]
 pub struct ResponsesGenerateResult {
     pub message: Message,
@@ -1031,6 +1072,7 @@ pub struct ResponsesGenerateResult {
 }
 
 impl OpenAIResponsesLanguageModel {
+    /// Create a new language model instance with the given model ID and configuration.
     pub fn new(model_id: impl Into<String>, config: OpenAIResponsesConfig) -> Self {
         Self {
             model_id: model_id.into(),
@@ -1047,6 +1089,7 @@ impl OpenAIResponsesLanguageModel {
         headers
     }
 
+    /// Build the request body and validate settings for a generate call.
     pub async fn get_args(&self, options: &GenerateOptions) -> Result<PreparedArgs, ProviderError> {
         let model_config = get_responses_model_config(&self.model_id);
         let provider_options = options.provider_options.clone().unwrap_or_default();
@@ -1271,6 +1314,7 @@ impl OpenAIResponsesLanguageModel {
         })
     }
 
+    /// Execute a non-streaming generate call and return the assembled result.
     pub async fn do_generate(
         &self,
         options: GenerateOptions,
@@ -1390,6 +1434,7 @@ impl OpenAIResponsesLanguageModel {
         })
     }
 
+    /// Execute a streaming generate call and return a `StreamResult`.
     pub async fn do_stream(&self, options: StreamOptions) -> Result<StreamResult, ProviderError> {
         let mut prepared = self.get_args(&options.generate).await?;
         let body_obj = prepared.body.as_object_mut().ok_or_else(|| {

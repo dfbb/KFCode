@@ -1,3 +1,4 @@
+//! Vercel AI provider implementation using the OpenAI-compatible chat completions API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -10,12 +11,14 @@ use crate::{
 
 const VERCEL_API_URL: &str = "https://api.vercel.ai/v1/chat/completions";
 
+/// Configuration for the Vercel AI provider.
 #[derive(Debug, Clone)]
 pub struct VercelConfig {
     pub api_key: String,
     pub base_url: Option<String>,
 }
 
+/// Provider implementation for Vercel AI.
 #[derive(Debug)]
 pub struct VercelProvider {
     client: Client,
@@ -24,6 +27,7 @@ pub struct VercelProvider {
 }
 
 impl VercelProvider {
+    /// Create a provider with the given API key and default settings.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self::with_config(VercelConfig {
             api_key: api_key.into(),
@@ -31,6 +35,7 @@ impl VercelProvider {
         })
     }
 
+    /// Create a provider with a fully specified `VercelConfig`.
     pub fn with_config(config: VercelConfig) -> Self {
         let models = vec![ModelInfo {
             id: "v0-1.0-md".to_string(),

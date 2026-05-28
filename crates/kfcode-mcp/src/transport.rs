@@ -1,3 +1,9 @@
+//! Transport implementations for the MCP protocol.
+//!
+//! Provides `McpTransport` (the async trait) and three concrete implementations:
+//! `StdioTransport` (child-process), `HttpTransport` (StreamableHTTP), and
+//! `SseTransport` (Server-Sent Events).
+
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -12,10 +18,14 @@ use crate::McpClientError;
 // Transport trait
 // ---------------------------------------------------------------------------
 
+/// Abstraction over the wire protocol used to communicate with an MCP server.
 #[async_trait]
 pub trait McpTransport: Send + Sync {
+    /// Send a JSON-RPC request to the server.
     async fn send(&self, request: &JsonRpcRequest) -> Result<(), McpClientError>;
+    /// Receive the next JSON-RPC message from the server, or `None` on EOF.
     async fn receive(&self) -> Result<Option<JsonRpcMessage>, McpClientError>;
+    /// Shut down the transport and release any underlying resources.
     async fn close(&self) -> Result<(), McpClientError>;
 }
 
@@ -23,12 +33,14 @@ pub trait McpTransport: Send + Sync {
 // StdioTransport
 // ---------------------------------------------------------------------------
 
+/// Transport that communicates with an MCP server over a spawned child process via stdio.
 pub struct StdioTransport {
     process: Mutex<Option<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
 }
 
 impl StdioTransport {
+    /// Spawn the server process and return a transport connected to its stdin/stdout.
     pub async fn new(
         command: &str,
         args: &[String],
@@ -169,6 +181,7 @@ pub struct HttpTransport {
 }
 
 impl HttpTransport {
+    /// Create a new HTTP transport targeting the given URL.
     pub fn new(url: String, headers: Option<HashMap<String, String>>) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
@@ -282,6 +295,7 @@ pub struct SseTransport {
 }
 
 impl SseTransport {
+    /// Create a new SSE transport without starting the listener; call `connect` before use.
     pub fn new(url: String, headers: Option<HashMap<String, String>>) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {

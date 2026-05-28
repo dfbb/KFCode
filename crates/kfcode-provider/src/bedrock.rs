@@ -1,3 +1,4 @@
+//! AWS Bedrock provider implementation with SigV4 request signing.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -10,6 +11,7 @@ use crate::{
 
 const BEDROCK_RUNTIME_URL: &str = "https://bedrock-runtime.{region}.amazonaws.com";
 
+/// Configuration for the AWS Bedrock provider.
 #[derive(Debug, Clone)]
 pub struct BedrockConfig {
     pub region: String,
@@ -19,6 +21,7 @@ pub struct BedrockConfig {
     pub endpoint_url: Option<String>,
 }
 
+/// Provider implementation for AWS Bedrock.
 #[derive(Debug)]
 pub struct BedrockProvider {
     client: Client,
@@ -27,6 +30,7 @@ pub struct BedrockProvider {
 }
 
 impl BedrockProvider {
+    /// Create a provider with the given region and AWS credentials.
     pub fn new(
         region: impl Into<String>,
         access_key_id: impl Into<String>,
@@ -41,6 +45,7 @@ impl BedrockProvider {
         })
     }
 
+    /// Create a provider with a fully specified `BedrockConfig`.
     pub fn with_config(config: BedrockConfig) -> Self {
         let models = vec![
             ModelInfo {

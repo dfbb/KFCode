@@ -1,3 +1,4 @@
+//! OpenAI provider implementation supporting both chat completions and the Responses API.
 use async_trait::async_trait;
 use futures::{stream, StreamExt};
 use reqwest::Client;
@@ -191,12 +192,14 @@ use crate::{
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
 
 #[derive(Debug, Clone)]
+/// Configuration for the OpenAI provider.
 pub struct OpenAIConfig {
     pub api_key: String,
     pub base_url: Option<String>,
     pub organization: Option<String>,
 }
 
+/// Provider implementation for OpenAI and OpenAI-compatible endpoints.
 #[derive(Debug)]
 pub struct OpenAIProvider {
     client: Client,
@@ -213,6 +216,7 @@ struct LegacySseParserState {
 }
 
 impl OpenAIProvider {
+    /// Create a provider with the given API key and default settings.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self::with_config(OpenAIConfig {
             api_key: api_key.into(),
@@ -221,6 +225,7 @@ impl OpenAIProvider {
         })
     }
 
+    /// Create a provider with the given API key and a custom base URL.
     pub fn new_with_base_url(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self::with_config(OpenAIConfig {
             api_key: api_key.into(),
@@ -296,10 +301,12 @@ impl OpenAIProvider {
         }
     }
 
+    /// Create a provider with a fully specified `OpenAIConfig`.
     pub fn with_config(config: OpenAIConfig) -> Self {
         Self::from_config(config, false)
     }
 
+    /// Create a provider configured for an OpenAI-compatible third-party endpoint.
     pub fn openai_compatible(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
         Self::from_config(
             OpenAIConfig {

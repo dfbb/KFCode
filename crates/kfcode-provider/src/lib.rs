@@ -1,33 +1,68 @@
+//! Provider implementations and shared types for all LLM backends.
+//!
+//! Re-exports the public API surface used by the rest of the workspace.
+
+/// Anthropic Claude provider implementation.
 pub mod anthropic;
+/// Authentication storage and credential management.
 pub mod auth;
+/// Azure OpenAI Service provider implementation.
 pub mod azure;
+/// AWS Bedrock provider implementation.
 pub mod bedrock;
+/// Provider registry bootstrap and configuration loading.
 pub mod bootstrap;
+/// Cerebras provider implementation.
 pub mod cerebras;
+/// Cohere provider implementation.
 pub mod cohere;
+/// Custom HTTP fetch proxy abstraction for provider requests.
 pub mod custom_fetch;
+/// DeepInfra provider implementation.
 pub mod deepinfra;
+/// DeepSeek provider implementation.
 pub mod deepseek;
+/// GitHub Copilot provider implementation.
 pub mod github_copilot;
+/// GitLab AI provider implementation.
 pub mod gitlab;
+/// Google Gemini provider implementation.
 pub mod google;
+/// Groq provider implementation.
 pub mod groq;
+/// Core chat request and response message types.
 pub mod message;
+/// Mistral AI provider implementation.
 pub mod mistral;
+/// models.dev registry types and lookup helpers.
 pub mod models;
+/// OpenAI provider implementation (chat completions and Responses API).
 pub mod openai;
+/// OpenRouter provider implementation.
 pub mod openrouter;
+/// Perplexity provider implementation.
 pub mod perplexity;
+/// Core `Provider` trait, `ProviderRegistry`, and `ProviderError`.
 pub mod provider;
+/// OpenAI Responses API types and streaming support.
 pub mod responses;
+/// Message conversion for the OpenAI Responses API input format.
 pub mod responses_convert;
+/// Retry logic with exponential backoff and header-based delay.
 pub mod retry;
+/// Streaming event types and SSE parsing helpers.
 pub mod stream;
+/// Together AI provider implementation.
 pub mod together;
+/// Tool definition and preparation types for chat and Responses APIs.
 pub mod tools;
+/// Message normalization, caching, and provider-option transforms.
 pub mod transform;
+/// Vercel AI provider implementation.
 pub mod vercel;
+/// Google Vertex AI provider implementation.
 pub mod vertex;
+/// xAI (Grok) provider implementation.
 pub mod xai;
 
 pub use auth::*;

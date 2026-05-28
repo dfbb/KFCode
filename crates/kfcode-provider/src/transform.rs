@@ -1,3 +1,4 @@
+//! Message normalization, prompt caching, and provider-option transforms applied before sending requests.
 use std::collections::HashMap;
 use std::fmt;
 
@@ -13,6 +14,7 @@ macro_rules! hashmap {
     }};
 }
 
+/// Identifies the provider family for routing caching and normalization logic.
 #[derive(Debug, Clone, Copy)]
 pub enum ProviderType {
     Anthropic,
@@ -24,6 +26,7 @@ pub enum ProviderType {
 }
 
 impl ProviderType {
+    /// Infer the provider type from a provider ID string.
     pub fn from_provider_id(id: &str) -> Self {
         let id_lower = id.to_lowercase();
         if id_lower == "anthropic" || id_lower.contains("claude") {
@@ -41,6 +44,7 @@ impl ProviderType {
         }
     }
 
+    /// Return `true` if this provider type supports prompt caching.
     pub fn supports_caching(&self) -> bool {
         matches!(
             self,
@@ -51,11 +55,13 @@ impl ProviderType {
         )
     }
 
+    /// Return `true` if this provider type supports interleaved thinking blocks.
     pub fn supports_interleaved_thinking(&self) -> bool {
         matches!(self, ProviderType::Anthropic | ProviderType::OpenRouter)
     }
 }
 
+/// Extracted reasoning content from a model response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningContent {
     pub text: String,
@@ -84,6 +90,7 @@ fn slug_override(key: &str) -> Option<&'static str> {
 // apply_caching
 // ---------------------------------------------------------------------------
 
+/// Apply prompt caching markers to the system messages and the last two messages.
 pub fn apply_caching(messages: &mut [Message], provider_type: ProviderType) {
     if !provider_type.supports_caching() {
         return;
@@ -189,6 +196,7 @@ fn merge_deep_into(
 // normalize_messages_for_caching
 // ---------------------------------------------------------------------------
 
+/// Replace empty assistant message content with a single space to satisfy provider requirements.
 pub fn normalize_messages_for_caching(messages: &mut [Message]) {
     for msg in messages.iter_mut() {
         if matches!(msg.role, crate::Role::Assistant) {
@@ -243,6 +251,10 @@ pub fn apply_interleaved_thinking(messages: &mut [Message], provider_type: Provi
 // extract_reasoning_from_response
 // ---------------------------------------------------------------------------
 
+/// Extract `<thinking>...</thinking>` content from a response string.
+///
+/// Returns `(Some(reasoning_text), remaining_text)` when a thinking block is found,
+/// or `(None, original_content)` when none is present.
 pub fn extract_reasoning_from_response(content: &str) -> (Option<String>, String) {
     let thinking_start = content.find("<thinking>");
     let thinking_end = content.find("</thinking>");
@@ -261,6 +273,7 @@ pub fn extract_reasoning_from_response(content: &str) -> (Option<String>, String
 // normalize_messages
 // ---------------------------------------------------------------------------
 
+/// Normalize messages for the given provider type and model, applying provider-specific fixes.
 pub fn normalize_messages(
     messages: &mut Vec<Message>,
     provider_type: ProviderType,
@@ -309,6 +322,7 @@ fn normalize_interleaved_field(_messages: &mut Vec<Message>, _model_id: &str) {
 
 /// Normalize messages for models that store reasoning in a specific provider field.
 /// Matches the TS: `if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field)`
+/// Move reasoning parts from assistant message content into the named provider field.
 pub fn normalize_messages_with_interleaved_field(messages: &mut Vec<Message>, field: &str) {
     use serde_json::json;
     for msg in messages.iter_mut() {
@@ -441,6 +455,7 @@ fn normalize_tool_call_id_mistral(id: &str) -> String {
 // Modality
 // ---------------------------------------------------------------------------
 
+/// Media modality type for content parts.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Modality {
     Image,
@@ -460,6 +475,7 @@ impl fmt::Display for Modality {
     }
 }
 
+/// Map a MIME type string to a `Modality`, returning `None` for unrecognized types.
 pub fn mime_to_modality(mime: &str) -> Option<Modality> {
     if mime.starts_with("image/") {
         Some(Modality::Image)
@@ -478,6 +494,7 @@ pub fn mime_to_modality(mime: &str) -> Option<Modality> {
 // unsupported_parts
 // ---------------------------------------------------------------------------
 
+/// Replace unsupported media parts in user messages with descriptive error text.
 pub fn unsupported_parts(messages: &mut [Message], supported_modalities: &[Modality]) {
     for msg in messages.iter_mut() {
         if !matches!(msg.role, crate::Role::User) {
@@ -557,6 +574,7 @@ pub fn unsupported_parts(messages: &mut [Message], supported_modalities: &[Modal
 // temperature / topP / topK
 // ---------------------------------------------------------------------------
 
+/// Return the recommended sampling temperature for a model, or `None` to use the provider default.
 pub fn temperature_for_model(model_id: &str) -> Option<f32> {
     let id = model_id.to_lowercase();
     if id.contains("qwen") {
@@ -583,6 +601,7 @@ pub fn temperature_for_model(model_id: &str) -> Option<f32> {
     None
 }
 
+/// Return the recommended top-p value for a model, or `None` to use the provider default.
 pub fn top_p_for_model(model_id: &str) -> Option<f32> {
     let id = model_id.to_lowercase();
     if id.contains("qwen") {
@@ -598,6 +617,7 @@ pub fn top_p_for_model(model_id: &str) -> Option<f32> {
     None
 }
 
+/// Return the recommended top-k value for a model, or `None` to use the provider default.
 pub fn top_k_for_model(model_id: &str) -> Option<u32> {
     let id = model_id.to_lowercase();
     if id.contains("minimax-m2") {
@@ -616,6 +636,7 @@ pub fn top_k_for_model(model_id: &str) -> Option<u32> {
 // transform_messages (top-level entry point matching TS `message()`)
 // ---------------------------------------------------------------------------
 
+/// Apply all message transforms: unsupported parts, normalization, caching, and option remapping.
 pub fn transform_messages(
     messages: &mut Vec<Message>,
     provider_type: ProviderType,
@@ -681,9 +702,8 @@ fn remap_provider_options(messages: &mut [Message], npm: &str, provider_id: &str
 // normalize_interleaved_thinking
 // ---------------------------------------------------------------------------
 
-/// Normalize interleaved thinking content in messages.
-/// For providers that don't support interleaved thinking, strip thinking blocks
-/// from all but the last assistant message.
+/// Strip thinking/reasoning blocks from all but the last assistant message when the provider
+/// does not support interleaved thinking.
 pub fn normalize_interleaved_thinking(
     messages: &mut Vec<Message>,
     _provider_type: &ProviderType,

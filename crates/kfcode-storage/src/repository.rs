@@ -1,3 +1,5 @@
+//! Repository types that provide CRUD access to sessions, messages, todos, parts, and shares.
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -101,15 +103,21 @@ impl SessionRow {
     }
 }
 
+/// Repository for creating, reading, updating, and deleting sessions.
 pub struct SessionRepository {
     pool: SqlitePool,
 }
 
 impl SessionRepository {
+    /// Creates a new `SessionRepository` backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
+    /// Inserts a new session record into the database.
+    ///
+    /// # Errors
+    /// Returns `DatabaseError::QueryError` if the INSERT fails (e.g., duplicate id).
     pub async fn create(&self, session: &Session) -> Result<(), DatabaseError> {
         let summary_diffs = session
             .summary
@@ -192,6 +200,7 @@ impl SessionRepository {
         Ok(())
     }
 
+    /// Fetches a single session by its id, returning `None` if not found.
     pub async fn get(&self, id: &str) -> Result<Option<Session>, DatabaseError> {
         let row = sqlx::query_as::<_, SessionRow>(
             r#"SELECT 
@@ -211,6 +220,9 @@ impl SessionRepository {
         Ok(row.map(|r| r.into_session()))
     }
 
+    /// Lists sessions ordered by `updated_at` descending, optionally filtered by project.
+    ///
+    /// Pass `None` for `project_id` to list across all projects.
     pub async fn list(
         &self,
         project_id: Option<&str>,
@@ -253,6 +265,7 @@ impl SessionRepository {
         Ok(rows.into_iter().map(|r| r.into_session()).collect())
     }
 
+    /// Updates mutable fields of an existing session identified by `session.id`.
     pub async fn update(&self, session: &Session) -> Result<(), DatabaseError> {
         let summary_diffs = session
             .summary
@@ -330,6 +343,7 @@ impl SessionRepository {
         Ok(())
     }
 
+    /// Deletes the session with the given id.
     pub async fn delete(&self, id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM sessions WHERE id = ?")
             .bind(id)
@@ -340,6 +354,7 @@ impl SessionRepository {
         Ok(())
     }
 
+    /// Lists all child sessions of the given parent, ordered by `created_at` descending.
     pub async fn list_children(&self, parent_id: &str) -> Result<Vec<Session>, DatabaseError> {
         let rows = sqlx::query_as::<_, SessionRow>(
             r#"SELECT 
@@ -379,15 +394,21 @@ fn string_to_status(s: &str) -> SessionStatus {
     }
 }
 
+/// Repository for creating, reading, and deleting session messages.
 pub struct MessageRepository {
     pool: SqlitePool,
 }
 
 impl MessageRepository {
+    /// Creates a new `MessageRepository` backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
+    /// Inserts a new message record.
+    ///
+    /// # Errors
+    /// Returns `DatabaseError::QueryError` if serialization of parts fails or the INSERT fails.
     pub async fn create(&self, message: &SessionMessage) -> Result<(), DatabaseError> {
         let data_json = serde_json::to_string(&message.parts)
             .map_err(|e| DatabaseError::QueryError(e.to_string()))?;
@@ -417,6 +438,7 @@ impl MessageRepository {
         Ok(())
     }
 
+    /// Inserts a message or updates all its fields if a record with the same id already exists.
     pub async fn upsert(&self, message: &SessionMessage) -> Result<(), DatabaseError> {
         let data_json = serde_json::to_string(&message.parts)
             .map_err(|e| DatabaseError::QueryError(e.to_string()))?;
@@ -451,6 +473,7 @@ impl MessageRepository {
         Ok(())
     }
 
+    /// Returns all messages belonging to a session, ordered by `created_at` ascending.
     pub async fn list_for_session(
         &self,
         session_id: &str,
@@ -506,6 +529,7 @@ impl MessageRepository {
         Ok(messages)
     }
 
+    /// Fetches a single message by its id, returning `None` if not found.
     pub async fn get(&self, id: &str) -> Result<Option<SessionMessage>, DatabaseError> {
         #[derive(FromRow)]
         struct MessageRow {
@@ -556,6 +580,7 @@ impl MessageRepository {
         }
     }
 
+    /// Deletes the message with the given id.
     pub async fn delete(&self, id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM messages WHERE id = ?")
             .bind(id)
@@ -566,6 +591,7 @@ impl MessageRepository {
         Ok(())
     }
 
+    /// Deletes all messages belonging to the given session.
     pub async fn delete_for_session(&self, session_id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM messages WHERE session_id = ?")
             .bind(session_id)
@@ -577,6 +603,7 @@ impl MessageRepository {
     }
 }
 
+/// A single to-do item associated with a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
     pub id: String,
@@ -586,15 +613,18 @@ pub struct TodoItem {
     pub position: i64,
 }
 
+/// Repository for managing per-session to-do items.
 pub struct TodoRepository {
     pool: SqlitePool,
 }
 
 impl TodoRepository {
+    /// Creates a new `TodoRepository` backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
+    /// Returns all to-do items for a session, ordered by `position` ascending.
     pub async fn list_for_session(&self, session_id: &str) -> Result<Vec<TodoItem>, DatabaseError> {
         #[derive(FromRow)]
         struct TodoRow {
@@ -628,6 +658,7 @@ impl TodoRepository {
         Ok(todos)
     }
 
+    /// Inserts a to-do item or updates its fields if a record with the same `(session_id, todo_id)` already exists.
     pub async fn upsert(&self, session_id: &str, todo: &TodoItem) -> Result<(), DatabaseError> {
         let now = Utc::now().timestamp_millis();
 
@@ -658,6 +689,7 @@ impl TodoRepository {
         Ok(())
     }
 
+    /// Deletes a specific to-do item identified by `(session_id, todo_id)`.
     pub async fn delete(&self, session_id: &str, todo_id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM todos WHERE session_id = ? AND todo_id = ?")
             .bind(session_id)
@@ -669,6 +701,7 @@ impl TodoRepository {
         Ok(())
     }
 
+    /// Deletes all to-do items belonging to the given session.
     pub async fn delete_for_session(&self, session_id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM todos WHERE session_id = ?")
             .bind(session_id)
@@ -680,6 +713,7 @@ impl TodoRepository {
     }
 }
 
+/// Persisted share record linking a session to its public share URL and secret.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionShareRow {
     pub session_id: String,
@@ -688,15 +722,18 @@ pub struct SessionShareRow {
     pub url: String,
 }
 
+/// Repository for managing session share records.
 pub struct ShareRepository {
     pool: SqlitePool,
 }
 
 impl ShareRepository {
+    /// Creates a new `ShareRepository` backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
+    /// Fetches the share record for a session, returning `None` if none exists.
     pub async fn get(&self, session_id: &str) -> Result<Option<SessionShareRow>, DatabaseError> {
         #[derive(FromRow)]
         struct ShareRow {
@@ -722,6 +759,7 @@ impl ShareRepository {
         }))
     }
 
+    /// Inserts a share record or updates it if one already exists for the session.
     pub async fn upsert(&self, share: &SessionShareRow) -> Result<(), DatabaseError> {
         let now = Utc::now().timestamp_millis();
 
@@ -747,6 +785,7 @@ impl ShareRepository {
         Ok(())
     }
 
+    /// Deletes the share record for the given session.
     pub async fn delete(&self, session_id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM session_shares WHERE session_id = ?")
             .bind(session_id)
@@ -758,6 +797,7 @@ impl ShareRepository {
     }
 }
 
+/// A flat database row representing one part of a message (text, tool call, tool result, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartRow {
     pub id: String,
@@ -774,15 +814,18 @@ pub struct PartRow {
     pub sort_order: i64,
 }
 
+/// Repository for managing individual message parts stored in the `parts` table.
 pub struct PartRepository {
     pool: SqlitePool,
 }
 
 impl PartRepository {
+    /// Creates a new `PartRepository` backed by the given connection pool.
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
+    /// Returns all parts for a message, ordered by `sort_order` ascending.
     pub async fn list_for_message(&self, message_id: &str) -> Result<Vec<PartRow>, DatabaseError> {
         #[derive(FromRow)]
         struct Row {
@@ -830,6 +873,7 @@ impl PartRepository {
             .collect())
     }
 
+    /// Returns all parts belonging to a session, ordered by `sort_order` ascending.
     pub async fn list_for_session(&self, session_id: &str) -> Result<Vec<PartRow>, DatabaseError> {
         #[derive(FromRow)]
         struct Row {
@@ -877,6 +921,7 @@ impl PartRepository {
             .collect())
     }
 
+    /// Inserts a part or updates its mutable fields if a record with the same id already exists.
     pub async fn upsert(&self, part: &PartRow) -> Result<(), DatabaseError> {
         let now = Utc::now().timestamp_millis();
 
@@ -917,6 +962,7 @@ impl PartRepository {
         Ok(())
     }
 
+    /// Deletes the part with the given id.
     pub async fn delete(&self, id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM parts WHERE id = ?")
             .bind(id)
@@ -927,6 +973,7 @@ impl PartRepository {
         Ok(())
     }
 
+    /// Deletes all parts belonging to the given message.
     pub async fn delete_for_message(&self, message_id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM parts WHERE message_id = ?")
             .bind(message_id)
@@ -937,6 +984,7 @@ impl PartRepository {
         Ok(())
     }
 
+    /// Deletes all parts belonging to the given session.
     pub async fn delete_for_session(&self, session_id: &str) -> Result<(), DatabaseError> {
         sqlx::query("DELETE FROM parts WHERE session_id = ?")
             .bind(session_id)

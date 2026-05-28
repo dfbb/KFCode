@@ -1,3 +1,5 @@
+//! Structured logging types and tracing initialisation for the application.
+
 use chrono::Local;
 use std::collections::HashMap;
 use std::io::Write;
@@ -5,11 +7,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+/// Severity level for log messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
+    /// Verbose diagnostic information.
     Debug,
+    /// General informational messages.
     Info,
+    /// Potentially harmful situations that do not stop execution.
     Warn,
+    /// Error conditions that may require attention.
     Error,
 }
 
@@ -46,6 +53,7 @@ struct CachedLogger {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
 }
 
+/// A logger that writes timestamped, tagged messages to a shared writer.
 pub struct Logger {
     tags: HashMap<String, String>,
     level: LogLevel,
@@ -121,6 +129,7 @@ impl Logger {
         format!("{} {}\n", level, parts.join(" "))
     }
 
+    /// Emits a debug-level message with optional extra key-value pairs.
     pub fn debug(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Debug) {
             let msg = self.build_message(LogLevel::Debug, message, extra.as_ref());
@@ -131,6 +140,7 @@ impl Logger {
         }
     }
 
+    /// Emits an info-level message with optional extra key-value pairs.
     pub fn info(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Info) {
             let msg = self.build_message(LogLevel::Info, message, extra.as_ref());
@@ -141,6 +151,7 @@ impl Logger {
         }
     }
 
+    /// Emits a warn-level message with optional extra key-value pairs.
     pub fn warn(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Warn) {
             let msg = self.build_message(LogLevel::Warn, message, extra.as_ref());
@@ -151,6 +162,7 @@ impl Logger {
         }
     }
 
+    /// Emits an error-level message with optional extra key-value pairs.
     pub fn error(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Error) {
             let msg = self.build_message(LogLevel::Error, message, extra.as_ref());
@@ -161,6 +173,7 @@ impl Logger {
         }
     }
 
+    /// Returns a new `TaggedLogger` with an additional key-value tag attached to every message.
     pub fn tag(&self, key: &str, value: &str) -> TaggedLogger {
         let mut tags = self.tags.clone();
         tags.insert(key.to_string(), value.to_string());
@@ -172,6 +185,7 @@ impl Logger {
     }
 }
 
+/// A `Logger` variant that carries a fixed set of extra key-value tags on every message.
 pub struct TaggedLogger {
     tags: HashMap<String, String>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
@@ -189,6 +203,7 @@ impl Clone for TaggedLogger {
 }
 
 impl TaggedLogger {
+    /// Emits a debug-level message with optional extra key-value pairs.
     pub fn debug(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Debug) {
             let msg = self.build_message(LogLevel::Debug, message, extra.as_ref());
@@ -199,6 +214,7 @@ impl TaggedLogger {
         }
     }
 
+    /// Emits an info-level message with optional extra key-value pairs.
     pub fn info(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Info) {
             let msg = self.build_message(LogLevel::Info, message, extra.as_ref());
@@ -209,6 +225,7 @@ impl TaggedLogger {
         }
     }
 
+    /// Emits a warn-level message with optional extra key-value pairs.
     pub fn warn(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Warn) {
             let msg = self.build_message(LogLevel::Warn, message, extra.as_ref());
@@ -219,6 +236,7 @@ impl TaggedLogger {
         }
     }
 
+    /// Emits an error-level message with optional extra key-value pairs.
     pub fn error(&self, message: &str, extra: Option<HashMap<String, String>>) {
         if self.should_log(LogLevel::Error) {
             let msg = self.build_message(LogLevel::Error, message, extra.as_ref());
@@ -276,9 +294,14 @@ impl TaggedLogger {
     }
 }
 
+/// Factory and lifecycle manager for named `Logger` instances.
 pub struct Log;
 
 impl Log {
+    /// Creates or retrieves a cached `Logger` for the given tags.
+    ///
+    /// If a `"service"` tag is present and a logger for that service already exists,
+    /// the cached instance is returned instead of creating a new one.
     pub fn create(tags: Option<HashMap<String, String>>) -> Logger {
         let tags = tags.unwrap_or_default();
 
@@ -314,12 +337,17 @@ impl Log {
         logger
     }
 
+    /// Returns the shared logger for the `"default"` service, creating it if necessary.
     pub fn default() -> Logger {
         let mut tags = HashMap::new();
         tags.insert("service".to_string(), "default".to_string());
         Self::create(Some(tags))
     }
 
+    /// Initialises file-based logging, creating a timestamped log file in `log_dir`.
+    ///
+    /// When `print` is `true`, logging is suppressed and `None` is returned.
+    /// Returns the path of the created log file on success.
     pub fn init(_level: Option<LogLevel>, log_dir: Option<PathBuf>, print: bool) -> Option<PathBuf> {
         if print {
             return None;
@@ -353,6 +381,10 @@ impl Log {
     }
 }
 
+/// Initialises the `tracing` subscriber, directing output to a file or stderr.
+///
+/// When `print` is `true`, logs are written to stderr and `None` is returned.
+/// Otherwise a timestamped log file is created in `log_dir` and its path is returned.
 pub fn init_tracing(_level: Option<&str>, log_dir: Option<PathBuf>, print: bool) -> Option<PathBuf> {
     if print {
         let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));

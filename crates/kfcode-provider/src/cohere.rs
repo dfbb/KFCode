@@ -1,3 +1,4 @@
+//! Cohere provider implementation using the OpenAI-compatible chat completions API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -8,6 +9,7 @@ use crate::{
 
 const COHERE_API_URL: &str = "https://api.cohere.ai/v2/chat";
 
+/// Provider implementation for Cohere.
 #[derive(Debug)]
 pub struct CohereProvider {
     client: Client,
@@ -16,6 +18,7 @@ pub struct CohereProvider {
 }
 
 impl CohereProvider {
+    /// Create a provider with the given API key.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: Client::new(),

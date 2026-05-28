@@ -1,8 +1,21 @@
+//! Determines the canonical prefix length (arity) of a bash command token sequence.
+//! Used to normalize commands before permission pattern matching.
+
 use std::collections::HashMap;
 
+/// Resolves the canonical command prefix from a token slice for permission matching.
+///
+/// Walks the token list from longest to shortest, looking up each joined prefix in the
+/// arity table. Returns the first `arity` tokens when a match is found, or just the
+/// first token as a fallback. Returns an empty vec when `tokens` is empty.
 pub struct BashArity;
 
 impl BashArity {
+    /// Returns the canonical permission prefix for `tokens`.
+    ///
+    /// Scans from the longest possible prefix down to length 1, returning the first
+    /// `arity` tokens when a known command is found. Falls back to `[tokens[0]]` for
+    /// unknown commands, and returns an empty vec for an empty input.
     pub fn prefix(tokens: &[String]) -> Vec<String> {
         for len in (1..=tokens.len()).rev() {
             let prefix: String = tokens[..len].join(" ");
@@ -20,6 +33,8 @@ impl BashArity {
 }
 
 lazy_static::lazy_static! {
+    /// Maps known command prefixes to their arity (number of significant leading tokens).
+    /// Values of 1 mean only the base command matters; higher values include subcommands.
     static ref ARITY: HashMap<&'static str, usize> = {
         let mut m = HashMap::new();
         // Single token commands

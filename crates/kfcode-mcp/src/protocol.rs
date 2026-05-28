@@ -1,5 +1,11 @@
+//! JSON-RPC 2.0 message types and MCP-specific request/response structures.
+//!
+//! All types here are plain data containers used for serialization; no
+//! business logic lives in this module.
+
 use serde::{Deserialize, Serialize};
 
+/// A JSON-RPC 2.0 request sent from the client to the server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
@@ -10,6 +16,7 @@ pub struct JsonRpcRequest {
 }
 
 impl JsonRpcRequest {
+    /// Create a new request with the given `id` and `method`, and no params.
     pub fn new(id: u64, method: impl Into<String>) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
@@ -19,12 +26,14 @@ impl JsonRpcRequest {
         }
     }
 
+    /// Attach a params value to this request, consuming and returning it.
     pub fn with_params(mut self, params: serde_json::Value) -> Self {
         self.params = Some(params);
         self
     }
 }
 
+/// A JSON-RPC 2.0 response received from the server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: String,
@@ -35,6 +44,7 @@ pub struct JsonRpcResponse {
     pub error: Option<JsonRpcError>,
 }
 
+/// A JSON-RPC 2.0 error object embedded in a response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcError {
     pub code: i32,
@@ -43,6 +53,7 @@ pub struct JsonRpcError {
     pub data: Option<serde_json::Value>,
 }
 
+/// A server-initiated JSON-RPC 2.0 notification (no `id` field).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcNotification {
     pub jsonrpc: String,
@@ -72,6 +83,7 @@ impl JsonRpcMessage {
     }
 }
 
+/// Parameters sent in the MCP `initialize` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitializeParams {
     #[serde(rename = "protocolVersion")]
@@ -98,24 +110,28 @@ impl Default for InitializeParams {
     }
 }
 
+/// Capabilities advertised by the client during initialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientCapabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<ToolsCapability>,
 }
 
+/// Flags for the tools capability negotiation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolsCapability {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_changed: Option<bool>,
 }
 
+/// Identity of the connecting client, sent during initialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientInfo {
     pub name: String,
     pub version: String,
 }
 
+/// Result returned by the server in response to an `initialize` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitializeResult {
     #[serde(rename = "protocolVersion")]
@@ -125,23 +141,27 @@ pub struct InitializeResult {
     pub server_info: ServerInfo,
 }
 
+/// Capabilities advertised by the server during initialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerCapabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<ToolsCapability>,
 }
 
+/// Identity of the MCP server, returned during initialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerInfo {
     pub name: String,
     pub version: String,
 }
 
+/// Result of a `tools/list` request containing all available tool definitions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListToolsResult {
     pub tools: Vec<ToolDefinition>,
 }
 
+/// Metadata describing a single tool exposed by an MCP server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDefinition {
     pub name: String,
@@ -151,6 +171,7 @@ pub struct ToolDefinition {
     pub input_schema: serde_json::Value,
 }
 
+/// Parameters for a `tools/call` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallToolParams {
     pub name: String,
@@ -158,6 +179,7 @@ pub struct CallToolParams {
     pub arguments: Option<serde_json::Value>,
 }
 
+/// Result of a `tools/call` request, containing one or more content blocks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallToolResult {
     pub content: Vec<ContentBlock>,
@@ -165,17 +187,20 @@ pub struct CallToolResult {
     pub is_error: Option<bool>,
 }
 
+/// Parameters for a `resources/read` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResourceParams {
     pub uri: String,
 }
 
+/// Result of a `resources/read` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResourceResult {
     #[serde(default)]
     pub contents: Vec<ResourceContent>,
 }
 
+/// A single resource item returned inside a `resources/read` result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceContent {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -188,6 +213,7 @@ pub struct ResourceContent {
     pub blob: Option<String>,
 }
 
+/// A typed content block within a tool call result (text, image data, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentBlock {
     #[serde(rename = "type")]

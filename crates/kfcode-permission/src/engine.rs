@@ -1,8 +1,11 @@
+//! Runtime permission engine: tracks pending approval requests and session-scoped approvals.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use kfcode_plugin::{HookContext, HookEvent};
 
+/// Metadata describing a single permission request raised by a tool call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionInfo {
     pub id: String,
@@ -16,36 +19,50 @@ pub struct PermissionInfo {
     pub time: TimeInfo,
 }
 
+/// Timestamps associated with a permission request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeInfo {
     pub created: u64,
 }
 
+/// A permission pattern that may target one or multiple resource paths.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Pattern {
+    /// A single resource path or glob pattern.
     Single(String),
+    /// Multiple resource paths or glob patterns, all of which must be covered.
     Multiple(Vec<String>),
 }
 
+/// The user's decision when responding to a pending permission request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Response {
+    /// Allow this specific request only.
     Once,
+    /// Allow all future requests matching the same permission and pattern in this session.
     Always,
+    /// Deny this request and return an error to the caller.
     Reject,
 }
 
+/// A permission request that has been queued and is awaiting a user response.
 #[derive(Debug, Clone)]
 pub struct PendingPermission {
     pub info: PermissionInfo,
 }
 
+/// Manages in-flight permission requests and session-scoped permanent approvals.
+///
+/// Pending requests are keyed by `(session_id, permission_id)`. Approved patterns are
+/// stored per session and checked before queuing new requests.
 pub struct PermissionEngine {
     pending: HashMap<String, HashMap<String, PendingPermission>>,
     approved: HashMap<String, HashMap<String, bool>>,
 }
 
 impl PermissionEngine {
+    /// Creates a new engine with no pending requests and no approved patterns.
     pub fn new() -> Self {
         Self {
             pending: HashMap::new(),
@@ -53,10 +70,12 @@ impl PermissionEngine {
         }
     }
 
+    /// Returns a reference to the full pending-request map, keyed by session then permission id.
     pub fn pending(&self) -> &HashMap<String, HashMap<String, PendingPermission>> {
         &self.pending
     }
 
+    /// Returns all pending permission requests sorted by id, across all sessions.
     pub fn list(&self) -> Vec<&PermissionInfo> {
         let mut result: Vec<&PermissionInfo> = Vec::new();
         for items in self.pending.values() {
@@ -82,6 +101,7 @@ impl PermissionEngine {
             .all(|k| patterns.iter().any(|p| wildcard_match(k, p)))
     }
 
+    /// Returns true if all keys derived from `pattern` are already approved for `session_id`.
     pub fn is_approved(
         &self,
         session_id: &str,
@@ -94,6 +114,14 @@ impl PermissionEngine {
         Self::covered(&keys, approved_for_session)
     }
 
+    /// Queues a permission request for user review, or resolves it immediately via plugin hooks.
+    ///
+    /// If the request is already approved for the session it returns `Ok(())` without queuing.
+    /// Plugin hooks may override the outcome to `"allow"` or `"deny"` before the request is
+    /// added to the pending map.
+    ///
+    /// # Errors
+    /// Returns `PermissionError::Rejected` if a plugin hook resolves the status to `"deny"`.
     pub async fn ask(&mut self, info: PermissionInfo) -> Result<(), PermissionError> {
         let session_id = info.session_id.clone();
         let permission_id = info.id.clone();
@@ -144,6 +172,14 @@ impl PermissionEngine {
         Ok(())
     }
 
+    /// Records the user's response to a pending permission request and removes it from the queue.
+    ///
+    /// `Response::Always` additionally stores the approved patterns so future requests with the
+    /// same permission and pattern are auto-approved for the session.
+    ///
+    /// # Errors
+    /// Returns `PermissionError::NotFound` if the session or permission id is unknown.
+    /// Returns `PermissionError::Rejected` if the response is `Response::Reject`.
     pub fn respond(
         &mut self,
         session_id: &str,
@@ -183,6 +219,7 @@ impl PermissionEngine {
         Ok(())
     }
 
+    /// Removes all pending requests and approved patterns for the given session.
     pub fn clear_session(&mut self, session_id: &str) {
         self.pending.remove(session_id);
         self.approved.remove(session_id);
@@ -236,11 +273,14 @@ fn wildcard_match(text: &str, pattern: &str) -> bool {
     text == pattern
 }
 
+/// Errors returned by the permission engine.
 #[derive(Debug, thiserror::Error)]
 pub enum PermissionError {
+    /// The requested session or permission id does not exist in the pending map.
     #[error("Permission not found: {0}/{1}")]
     NotFound(String, String),
 
+    /// The permission was explicitly denied, either by a plugin hook or by the user.
     #[error("Permission rejected")]
     Rejected {
         session_id: String,

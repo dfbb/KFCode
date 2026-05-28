@@ -1,5 +1,10 @@
+//! Shared utility modules for filesystem operations, logging, and miscellaneous helpers.
+
+/// Async filesystem helpers for path inspection and traversal.
 pub mod filesystem;
+/// Structured logging and tracing initialisation.
 pub mod logging;
+/// Collection of small, focused utility sub-modules.
 pub mod util;
 
 pub use filesystem::Filesystem;

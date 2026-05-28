@@ -1,3 +1,4 @@
+//! GitLab AI provider implementation using the OpenAI-compatible chat completions API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -10,12 +11,14 @@ use crate::{
 
 const GITLAB_API_URL: &str = "https://gitlab.com/api/v4/ai/chat/completions";
 
+/// Configuration for the GitLab AI provider.
 #[derive(Debug, Clone)]
 pub struct GitLabConfig {
     pub api_key: String,
     pub instance_url: Option<String>,
 }
 
+/// Provider implementation for GitLab AI.
 #[derive(Debug)]
 pub struct GitLabProvider {
     client: Client,
@@ -24,6 +27,7 @@ pub struct GitLabProvider {
 }
 
 impl GitLabProvider {
+    /// Create a provider with the given API key and default settings.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self::with_config(GitLabConfig {
             api_key: api_key.into(),
@@ -31,6 +35,7 @@ impl GitLabProvider {
         })
     }
 
+    /// Create a provider with a fully specified `GitLabConfig`.
     pub fn with_config(config: GitLabConfig) -> Self {
         let models = vec![
             ModelInfo {

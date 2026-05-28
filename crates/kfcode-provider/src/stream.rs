@@ -1,8 +1,10 @@
+//! Streaming event types and SSE parsing helpers for OpenAI-compatible and Anthropic streams.
 use crate::provider::ProviderError;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
+/// Events emitted by a streaming chat response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StreamEvent {
     /// Stream has started.
@@ -78,13 +80,16 @@ pub enum StreamEvent {
         usage: StreamUsage,
         provider_metadata: Option<serde_json::Value>,
     },
+    /// Cumulative token usage for the current step.
     Usage {
         prompt_tokens: u64,
         completion_tokens: u64,
     },
     /// Stream finished (maps to "finish" in TS).
     Finish,
+    /// The stream has completed successfully.
     Done,
+    /// A fatal stream error occurred.
     Error(String),
 }
 
@@ -122,8 +127,10 @@ pub struct StreamUsage {
     pub cache_write_tokens: u64,
 }
 
+/// A pinned, boxed stream of `StreamEvent` results.
 pub type StreamResult = Pin<Box<dyn Stream<Item = Result<StreamEvent, ProviderError>> + Send>>;
 
+/// A raw SSE chunk from an OpenAI-compatible streaming response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAISSEvent {
     #[serde(default)]
@@ -174,6 +181,9 @@ fn openai_tool_call_id(tc: &OpenAIToolCall) -> String {
         .unwrap_or_else(|| format!("tool-call-{}", tc.index))
 }
 
+/// Parse a raw OpenAI-compatible SSE data string into a `StreamEvent`.
+///
+/// Returns `None` if the data cannot be parsed or does not map to a known event.
 pub fn parse_openai_sse(data: &str) -> Option<StreamEvent> {
     if data == "[DONE]" {
         return Some(StreamEvent::Done);
@@ -228,6 +238,7 @@ pub fn parse_openai_sse(data: &str) -> Option<StreamEvent> {
     None
 }
 
+/// A raw SSE chunk from an Anthropic streaming response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnthropicEvent {
     #[serde(rename = "type")]
@@ -267,6 +278,9 @@ pub struct AnthropicUsage {
     pub output_tokens: u64,
 }
 
+/// Parse a raw Anthropic SSE data string into a `StreamEvent`.
+///
+/// Returns `None` if the data cannot be parsed or does not map to a known event.
 pub fn parse_anthropic_sse(data: &str) -> Option<StreamEvent> {
     let event: AnthropicEvent = serde_json::from_str(data).ok()?;
 

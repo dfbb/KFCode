@@ -1,3 +1,4 @@
+//! Anthropic Claude provider implementation using the Messages API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -10,12 +11,14 @@ use crate::{
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 
+/// Configuration for the Anthropic provider.
 #[derive(Debug, Clone)]
 pub struct AnthropicConfig {
     pub api_key: String,
     pub base_url: Option<String>,
 }
 
+/// Provider implementation for Anthropic Claude models.
 #[derive(Debug)]
 pub struct AnthropicProvider {
     client: Client,
@@ -24,6 +27,7 @@ pub struct AnthropicProvider {
 }
 
 impl AnthropicProvider {
+    /// Create a provider with the given API key and default settings.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self::with_config(AnthropicConfig {
             api_key: api_key.into(),
@@ -31,6 +35,7 @@ impl AnthropicProvider {
         })
     }
 
+    /// Create a provider with a fully specified `AnthropicConfig`.
     pub fn with_config(config: AnthropicConfig) -> Self {
         let models = vec![
             ModelInfo {

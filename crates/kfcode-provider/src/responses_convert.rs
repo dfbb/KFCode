@@ -1,3 +1,4 @@
+//! Converts internal `Message` slices into the OpenAI Responses API input format.
 use std::collections::{HashMap, HashSet};
 
 use serde_json::{json, Value};
@@ -7,6 +8,9 @@ use crate::responses::{
     CallWarning, LocalShellAction, ResponsesInput, ResponsesReasoning, SystemMessageMode,
 };
 
+/// Convert a slice of internal `Message` values into the Responses API input format.
+///
+/// Returns the input array and any warnings generated during conversion.
 pub async fn convert_to_openai_responses_input(
     prompt: &[Message],
     system_message_mode: SystemMessageMode,

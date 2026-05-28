@@ -1,3 +1,4 @@
+//! Provider registry bootstrap: loads models.dev data, applies custom loaders, and builds the runtime registry.
 use async_trait::async_trait;
 use crate::anthropic::AnthropicProvider;
 use crate::auth::AuthInfo;
@@ -35,8 +36,10 @@ use tracing;
 // Error types matching TS ModelNotFoundError and InitError
 // ---------------------------------------------------------------------------
 
+/// Errors that can occur during provider bootstrap or model lookup.
 #[derive(Debug, thiserror::Error)]
 pub enum BootstrapError {
+    /// The requested model was not found; includes suggestions for similar model IDs.
     #[error("Model not found: provider={provider_id} model={model_id}")]
     ModelNotFound {
         provider_id: String,
@@ -44,6 +47,7 @@ pub enum BootstrapError {
         suggestions: Vec<String>,
     },
 
+    /// A provider failed to initialize.
     #[error("Provider initialization failed: {provider_id}")]
     InitError {
         provider_id: String,
@@ -90,6 +94,7 @@ pub static BUNDLED_PROVIDERS: Lazy<HashMap<&'static str, &'static str>> = Lazy::
 // ---------------------------------------------------------------------------
 
 /// Check if a model ID represents GPT-5 or later.
+/// Return `true` if the model ID represents GPT-5 or a later numbered GPT model.
 pub fn is_gpt5_or_later(model_id: &str) -> bool {
     static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^gpt-(\d+)").unwrap());
     if let Some(caps) = RE.captures(model_id) {
@@ -103,6 +108,7 @@ pub fn is_gpt5_or_later(model_id: &str) -> bool {
 }
 
 /// Determine whether to use the Copilot responses API for a given model.
+/// Return `true` if the GitHub Copilot Responses API should be used for the given model.
 pub fn should_use_copilot_responses_api(model_id: &str) -> bool {
     is_gpt5_or_later(model_id) && !model_id.starts_with("gpt-5-mini")
 }
@@ -111,6 +117,7 @@ pub fn should_use_copilot_responses_api(model_id: &str) -> bool {
 // Provider.Model - the runtime model type (matches TS Provider.Model)
 // ---------------------------------------------------------------------------
 
+/// Capability flags for a runtime model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelCapabilities {
     pub temperature: bool,
@@ -122,6 +129,7 @@ pub struct ModelCapabilities {
     pub interleaved: InterleavedConfig,
 }
 
+/// Set of supported modalities (text, audio, image, video, pdf).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModalitySet {
     pub text: bool,
@@ -143,6 +151,7 @@ impl Default for ModalitySet {
     }
 }
 
+/// Interleaved thinking configuration for a runtime model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum InterleavedConfig {
@@ -156,12 +165,14 @@ impl Default for InterleavedConfig {
     }
 }
 
+/// Cache read/write cost pair for a model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelCostCache {
     pub read: f64,
     pub write: f64,
 }
 
+/// Pricing for prompts exceeding 200k tokens.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelCostOver200K {
     pub input: f64,
@@ -169,6 +180,7 @@ pub struct ModelCostOver200K {
     pub cache: ModelCostCache,
 }
 
+/// Full pricing information for a runtime model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderModelCost {
     pub input: f64,
@@ -178,6 +190,7 @@ pub struct ProviderModelCost {
     pub experimental_over_200k: Option<ModelCostOver200K>,
 }
 
+/// Token limits for a runtime model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderModelLimit {
     pub context: u64,
@@ -186,6 +199,7 @@ pub struct ProviderModelLimit {
     pub output: u64,
 }
 
+/// API routing metadata for a runtime model (ID, base URL, npm package).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderModelApi {
     pub id: String,
@@ -193,7 +207,7 @@ pub struct ProviderModelApi {
     pub npm: String,
 }
 
-/// Runtime model type matching TS `Provider.Model`.
+/// Runtime model descriptor, combining capabilities, cost, limits, and routing metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderModel {
     pub id: String,
@@ -217,6 +231,7 @@ pub struct ProviderModel {
 // Provider.Info - the runtime provider type (matches TS Provider.Info)
 // ---------------------------------------------------------------------------
 
+/// Runtime provider state, including its models and resolved options.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderState {
     pub id: String,
@@ -264,6 +279,7 @@ impl Default for CustomLoaderResult {
 
 /// Trait for provider-specific model loading customization.
 pub trait CustomLoader: Send + Sync {
+    /// Run the loader for the given provider and optional existing state, returning customization results.
     fn load(
         &self,
         provider: &ModelsProviderInfo,
@@ -974,7 +990,7 @@ fn get_custom_loader(provider_id: &str) -> Option<Box<dyn CustomLoader>> {
 // Transform helpers: from_models_dev_model / from_models_dev_provider
 // ---------------------------------------------------------------------------
 
-/// Transform a models.dev model into a runtime ProviderModel.
+/// Transform a models.dev model descriptor into a runtime `ProviderModel`.
 pub fn from_models_dev_model(provider: &ModelsProviderInfo, model: &ModelInfo) -> ProviderModel {
     let modalities_input = model
         .modalities
@@ -1081,7 +1097,7 @@ pub fn from_models_dev_model(provider: &ModelsProviderInfo, model: &ModelInfo) -
     }
 }
 
-/// Transform a models.dev provider into a runtime ProviderState.
+/// Transform a models.dev provider descriptor into a runtime `ProviderState`.
 pub fn from_models_dev_provider(provider: &ModelsProviderInfo) -> ProviderState {
     let models = provider
         .models
@@ -1731,6 +1747,7 @@ impl ProviderBootstrapState {
 // ParsedModel and parse_model
 // ---------------------------------------------------------------------------
 
+/// A parsed `"provider/model"` string.
 #[derive(Debug, Clone)]
 pub struct ParsedModel {
     pub provider_id: String,
@@ -1756,6 +1773,7 @@ pub fn parse_model(model_str: &str) -> ParsedModel {
 // ProviderPatch - partial update for ProviderState
 // ---------------------------------------------------------------------------
 
+/// A partial update applied to a `ProviderState` during bootstrap.
 #[derive(Debug, Clone, Default)]
 pub struct ProviderPatch {
     pub source: Option<String>,

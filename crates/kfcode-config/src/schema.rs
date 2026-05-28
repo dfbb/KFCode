@@ -1,6 +1,10 @@
+//! Serializable schema types for the kfcode configuration file.
+//! All types derive `Serialize`/`Deserialize` and are used by `ConfigLoader`.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// The root configuration object, representing a merged kfcode config.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
@@ -110,21 +114,29 @@ pub struct Config {
     pub env: Option<HashMap<String, String>>,
 }
 
+/// Controls how sessions are shared: manually, automatically, or not at all.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ShareMode {
+    /// Share only when the user explicitly requests it.
     Manual,
+    /// Share sessions automatically after each turn.
     Auto,
+    /// Sharing is disabled.
     Disabled,
 }
 
+/// Controls automatic update behavior: a boolean flag or a named mode string.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AutoUpdateMode {
+    /// Enable or disable auto-update entirely.
     Boolean(bool),
+    /// Named update mode, e.g. `"notify"`.
     Notify(String),
 }
 
+/// Keyboard shortcut bindings for all interactive TUI actions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeybindsConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -325,6 +337,7 @@ pub struct KeybindsConfig {
     pub interrupt: Option<String>,
 }
 
+/// TUI display and behavior settings.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TuiConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -339,11 +352,13 @@ pub struct TuiConfig {
     pub diff_style: Option<String>,
 }
 
+/// Scroll acceleration settings for the TUI message view.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ScrollAccelerationConfig {
     pub enabled: bool,
 }
 
+/// Network server settings for the kfcode HTTP/mDNS server.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -362,6 +377,7 @@ pub struct ServerConfig {
     pub cors: Option<Vec<String>>,
 }
 
+/// Definition of a slash command, loaded from config or a markdown file.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CommandConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -378,6 +394,7 @@ pub struct CommandConfig {
     pub subtask: Option<bool>,
 }
 
+/// Paths and URLs from which additional skills are loaded.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillsConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -386,18 +403,21 @@ pub struct SkillsConfig {
     pub urls: Vec<String>,
 }
 
+/// File watcher settings, including glob patterns to ignore.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WatcherConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ignore: Vec<String>,
 }
 
+/// A named collection of agent configurations, keyed by agent name.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentConfigs {
     #[serde(flatten)]
     pub entries: HashMap<String, AgentConfig>,
 }
 
+/// Configuration for a single agent, including model, prompt, and permission overrides.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AgentConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -436,14 +456,19 @@ pub struct AgentConfig {
     pub tools: Option<HashMap<String, bool>>,
 }
 
+/// Determines how an agent is invoked within a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentMode {
+    /// The agent runs as the top-level primary agent.
     Primary,
+    /// The agent runs as a subagent spawned by another agent.
     Subagent,
+    /// The agent can run in either role.
     All,
 }
 
+/// Configuration for a model provider, including API credentials and model overrides.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -464,6 +489,7 @@ pub struct ProviderConfig {
     pub blacklist: Vec<String>,
 }
 
+/// Per-model overrides such as a custom API key, base URL, or variant map.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModelConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -478,6 +504,7 @@ pub struct ModelConfig {
     pub variants: Option<HashMap<String, ModelVariantConfig>>,
 }
 
+/// Extra settings for a specific model variant, with open-ended extension fields.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModelVariantConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -486,13 +513,17 @@ pub struct ModelVariantConfig {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
+/// An MCP server entry: either a simple enabled flag or a full server definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum McpServerConfig {
+    /// Shorthand to enable or disable a previously defined server.
     Enabled { enabled: bool },
+    /// Full server definition with command, URL, auth, and other options.
     Full(McpServer),
 }
 
+/// Full definition of an MCP server, supporting both local (stdio) and remote (HTTP) transports.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct McpServer {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
@@ -540,10 +571,13 @@ pub struct McpServer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum McpOAuthConfig {
+    /// Set to `false` to disable OAuth auto-detection for this server.
     Disabled(bool),
+    /// Full OAuth client credentials and scope.
     Config(McpOAuth),
 }
 
+/// OAuth client credentials used when authenticating against a remote MCP server.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct McpOAuth {
     #[serde(
@@ -562,13 +596,17 @@ pub struct McpOAuth {
     pub scope: Option<String>,
 }
 
+/// Code formatter configuration: either disabled entirely or a map of formatter entries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FormatterConfig {
+    /// Set to `false` to disable all formatters.
     Disabled(bool),
+    /// Map of formatter name to its configuration.
     Enabled(HashMap<String, FormatterEntry>),
 }
 
+/// Configuration for a single code formatter, including the command and file extensions it handles.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FormatterEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -581,13 +619,17 @@ pub struct FormatterEntry {
     pub extensions: Vec<String>,
 }
 
+/// LSP configuration: either disabled entirely or a map of language server entries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LspConfig {
+    /// Set to `false` to disable all language servers.
     Disabled(bool),
+    /// Map of language server name to its configuration.
     Enabled(HashMap<String, LspServerConfig>),
 }
 
+/// Configuration for a single LSP server, including the launch command and file extensions.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LspServerConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -636,6 +678,7 @@ pub enum PermissionAction {
     Deny,
 }
 
+/// Enterprise deployment settings, such as the managed config directory path.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnterpriseConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -644,6 +687,7 @@ pub struct EnterpriseConfig {
     pub managed_config_dir: Option<String>,
 }
 
+/// Settings that control context compaction behavior.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CompactionConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -654,6 +698,7 @@ pub struct CompactionConfig {
     pub reserved: Option<u64>,
 }
 
+/// Opt-in experimental features that are not yet stable.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExperimentalConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1177,6 +1222,8 @@ impl DeepMerge for ExperimentalConfig {
 }
 
 impl Config {
+    /// Merges `other` into `self`, with `other` taking precedence for scalar fields.
+    /// Arrays (`plugin`, `instructions`) are appended without duplicates.
     pub fn merge(&mut self, other: Config) {
         merge_option_replace(&mut self.schema, other.schema);
         merge_option_replace(&mut self.theme, other.theme);

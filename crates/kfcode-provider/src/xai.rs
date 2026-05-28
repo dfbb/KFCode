@@ -1,3 +1,4 @@
+//! xAI (Grok) provider implementation using the OpenAI-compatible chat completions API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -8,6 +9,7 @@ use crate::{
 
 const XAI_API_URL: &str = "https://api.x.ai/v1/chat/completions";
 
+/// Provider implementation for xAI (Grok).
 #[derive(Debug)]
 pub struct XaiProvider {
     client: Client,
@@ -16,6 +18,7 @@ pub struct XaiProvider {
 }
 
 impl XaiProvider {
+    /// Create a provider with the given API key.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: Client::new(),

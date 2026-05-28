@@ -1,3 +1,6 @@
+//! Config loading: discovers, reads, and merges configuration from all sources.
+//! Handles global, project, environment, managed, and remote well-known configs.
+
 use crate::schema::{
     AgentConfig, AgentConfigs, AgentMode, CommandConfig, PermissionAction, PermissionConfig,
     PermissionRule,
@@ -10,12 +13,14 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Incrementally loads and merges configuration from multiple sources.
 pub struct ConfigLoader {
     config: Config,
     config_paths: Vec<PathBuf>,
 }
 
 impl ConfigLoader {
+    /// Creates a new loader with an empty default config.
     pub fn new() -> Self {
         Self {
             config: Config::default(),
@@ -28,6 +33,7 @@ impl ConfigLoader {
         self.config.clone()
     }
 
+    /// Parses and merges config from a raw JSONC string.
     pub fn load_from_str(&mut self, content: &str) -> Result<()> {
         let config: Config =
             parse_jsonc(content).with_context(|| "Failed to parse config content")?;
@@ -35,6 +41,8 @@ impl ConfigLoader {
         Ok(())
     }
 
+    /// Reads a config file from `path`, applies env and file substitutions, and merges it.
+    /// Silently succeeds if the file does not exist.
     pub fn load_from_file<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let path = path.as_ref();
         if !path.exists() {
@@ -60,6 +68,7 @@ impl ConfigLoader {
         Ok(())
     }
 
+    /// Loads the global config file from the platform config directory.
     pub fn load_global(&mut self) -> Result<()> {
         let global_config_path = get_global_config_path();
 
@@ -84,6 +93,7 @@ impl ConfigLoader {
         Ok(())
     }
 
+    /// Walks up from `project_dir` to the worktree root and merges all project config files found.
     pub fn load_project<P: AsRef<Path>>(&mut self, project_dir: P) -> Result<()> {
         let input = project_dir.as_ref();
         let start_dir = if input.is_dir() {
@@ -113,6 +123,7 @@ impl ConfigLoader {
         Ok(())
     }
 
+    /// Loads the config file pointed to by the `KFCODE_CONFIG` environment variable, if set.
     pub fn load_from_env(&mut self) -> Result<()> {
         if let Ok(config_path) = env::var("KFCODE_CONFIG") {
             self.load_from_file(&config_path)?;
@@ -243,10 +254,12 @@ impl ConfigLoader {
         Ok(())
     }
 
+    /// Returns a reference to the currently merged config.
     pub fn config(&self) -> &Config {
         &self.config
     }
 
+    /// Returns the ordered list of file paths that were successfully loaded.
     pub fn config_paths(&self) -> &[PathBuf] {
         &self.config_paths
     }

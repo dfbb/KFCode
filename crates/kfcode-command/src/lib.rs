@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Command metadata
+/// A slash command with its name, description, template body, and origin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command {
     pub name: String,
@@ -19,15 +19,20 @@ pub struct Command {
     pub source: CommandSource,
 }
 
+/// The origin of a command, used to distinguish built-in commands from user-defined or MCP-sourced ones.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CommandSource {
+    /// Command loaded from a `.kfcode/commands/*.md` file on disk.
     File(PathBuf),
+    /// Command compiled into the binary as a built-in.
     Builtin,
+    /// Command provided by an MCP server as a named prompt.
     Mcp { server: String, prompt: String },
+    /// Command provided by a skill plugin.
     Skill { name: String },
 }
 
-/// Command execution context
+/// Runtime context passed to a command during execution, carrying arguments and variable bindings.
 #[derive(Debug, Clone)]
 pub struct CommandContext {
     pub arguments: Vec<String>,
@@ -36,6 +41,7 @@ pub struct CommandContext {
 }
 
 impl CommandContext {
+    /// Creates a new context rooted at the given working directory with no arguments or variables.
     pub fn new(working_directory: PathBuf) -> Self {
         Self {
             arguments: Vec::new(),
@@ -44,23 +50,26 @@ impl CommandContext {
         }
     }
 
+    /// Sets the positional arguments for this context, replacing any previously set arguments.
     pub fn with_arguments(mut self, args: Vec<String>) -> Self {
         self.arguments = args;
         self
     }
 
+    /// Inserts a named variable binding, replacing any existing value for the same key.
     pub fn with_variable(mut self, key: String, value: String) -> Self {
         self.variables.insert(key, value);
         self
     }
 }
 
-/// Command registry for loading and executing commands
+/// In-memory store of all available commands, pre-loaded with built-in commands on construction.
 pub struct CommandRegistry {
     commands: HashMap<String, Command>,
 }
 
 impl CommandRegistry {
+    /// Creates a new registry pre-populated with all built-in commands.
     pub fn new() -> Self {
         let mut registry = Self {
             commands: HashMap::new(),
@@ -149,6 +158,9 @@ impl CommandRegistry {
         Ok(())
     }
 
+    /// Parses a slash-command string and returns the matching command and its positional arguments.
+    ///
+    /// Returns `None` if the input does not start with `/` or the command name is not registered.
     pub fn parse(&self, input: &str) -> Option<(&Command, Vec<String>)> {
         let input = input.trim_start();
 
@@ -220,6 +232,7 @@ impl CommandRegistry {
     fn render_template(&self, template: &str, ctx: CommandContext) -> String {
         let mut result = template.to_string();
 
+        // Replace positional placeholders $1, $2, … with the corresponding argument.
         for (i, arg) in ctx.arguments.iter().enumerate() {
             let placeholder = format!("${}", i + 1);
             result = result.replace(&placeholder, arg);
@@ -242,6 +255,8 @@ impl CommandRegistry {
     }
 }
 
+// Extracts the key-value object from a hook payload, trying several envelope shapes
+// that different plugin implementations may produce.
 fn command_payload_object(
     payload: &serde_json::Value,
 ) -> Option<&serde_json::Map<String, serde_json::Value>> {
@@ -252,6 +267,9 @@ fn command_payload_object(
         .or_else(|| payload.get("data").and_then(|value| value.as_object()))
 }
 
+// Applies a single hook output payload to the rendered template string.
+// Prefers an explicit "output"/"template" string field; falls back to
+// concatenating all "text"-typed parts from a "parts" array.
 fn apply_command_hook_payload(rendered: &mut String, payload: &serde_json::Value) {
     let Some(object) = command_payload_object(payload) else {
         return;

@@ -1,3 +1,5 @@
+//! Regex-based file search engine with directory traversal, glob filtering, and directory tree rendering.
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -5,6 +7,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+/// A single line in a file that matched the search pattern, including byte offset and sub-match spans.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchResult {
     pub path: String,
@@ -14,6 +17,7 @@ pub struct MatchResult {
     pub submatches: Vec<SubMatch>,
 }
 
+/// A contiguous span within a matched line that the regex captured, with byte-level start and end positions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubMatch {
     pub text: String,
@@ -21,6 +25,7 @@ pub struct SubMatch {
     pub end: usize,
 }
 
+/// Aggregate statistics for a completed search run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stats {
     pub elapsed: String,
@@ -29,6 +34,7 @@ pub struct Stats {
     pub matched_lines: usize,
 }
 
+/// Options that control which files are visited during a directory walk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileSearchOptions {
     pub glob: Vec<String>,
@@ -48,9 +54,14 @@ impl Default for FileSearchOptions {
     }
 }
 
+/// The main search engine; all methods are free functions grouped under this unit struct.
 pub struct Ripgrep;
 
 impl Ripgrep {
+    /// Searches `path` (file or directory) for lines matching `pattern`, returning all matches.
+    ///
+    /// # Errors
+    /// Returns an error if `pattern` is not a valid regex or if a file cannot be read.
     pub fn search<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -58,6 +69,10 @@ impl Ripgrep {
         Self::search_with_limit(path, pattern, usize::MAX)
     }
 
+    /// Searches `path` for lines matching `pattern`, stopping once `limit` matches are collected.
+    ///
+    /// # Errors
+    /// Returns an error if `pattern` is not a valid regex or if a file cannot be read.
     pub fn search_with_limit<P: AsRef<Path>>(
         path: P,
         pattern: &str,
@@ -82,6 +97,10 @@ impl Ripgrep {
         Ok(matches)
     }
 
+    /// Returns all files under `path` that satisfy `options`, respecting glob patterns and hidden-file rules.
+    ///
+    /// # Errors
+    /// Returns an error if `path` is not an existing directory.
     pub fn files<P: AsRef<Path>>(
         path: P,
         options: FileSearchOptions,
@@ -135,6 +154,10 @@ impl Ripgrep {
         Ok(result)
     }
 
+    /// Renders a BFS directory tree rooted at `path` as a newline-separated string, optionally capped at `limit` nodes.
+    ///
+    /// # Errors
+    /// Returns an error if `path` is not an existing directory.
     pub fn tree<P: AsRef<Path>>(path: P, limit: Option<usize>) -> Result<String, io::Error> {
         let path = path.as_ref();
         let files = Self::files(path, FileSearchOptions::default())?;

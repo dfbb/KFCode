@@ -1,14 +1,18 @@
+//! Authentication credential types and the `AuthManager` for persisting provider credentials.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Stored authentication credential for a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AuthInfo {
+    /// A static API key credential.
     #[serde(rename = "api")]
     Api { key: String },
+    /// An OAuth 2.0 access/refresh token pair.
     #[serde(rename = "oauth")]
     OAuth {
         access: String,
@@ -20,6 +24,7 @@ pub enum AuthInfo {
         #[serde(alias = "enterpriseUrl")]
         enterprise_url: Option<String>,
     },
+    /// A well-known token stored under a specific environment variable name.
     #[serde(rename = "wellknown")]
     WellKnown {
         /// Environment variable name to set with the token
@@ -29,18 +34,23 @@ pub enum AuthInfo {
     },
 }
 
+/// Describes a supported authentication method for a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthMethod {
     pub auth_type: AuthType,
     pub label: String,
 }
 
+/// The type of authentication flow supported by a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthType {
+    /// OAuth 2.0 authorization code flow.
     OAuth,
+    /// Static API key.
     Api,
 }
 
+/// Authorization details for initiating an auth flow with a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Authorization {
     pub url: String,
@@ -48,18 +58,23 @@ pub struct Authorization {
     pub instructions: String,
 }
 
+/// How the authorization code is obtained during an OAuth flow.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthMethodType {
+    /// The code is obtained automatically (e.g., via a local redirect).
     Auto,
+    /// The user must manually enter the authorization code.
     Code,
 }
 
+/// Thread-safe store for provider credentials, with optional file persistence.
 pub struct AuthManager {
     credentials: Arc<RwLock<HashMap<String, AuthInfo>>>,
     filepath: Option<PathBuf>,
 }
 
 impl AuthManager {
+    /// Create an in-memory `AuthManager` with no file backing.
     pub fn new() -> Self {
         Self {
             credentials: Arc::new(RwLock::new(HashMap::new())),
@@ -67,6 +82,7 @@ impl AuthManager {
         }
     }
 
+    /// Create an `AuthManager` backed by the given file path.
     pub fn with_filepath(filepath: PathBuf) -> Self {
         Self {
             credentials: Arc::new(RwLock::new(HashMap::new())),
@@ -74,6 +90,7 @@ impl AuthManager {
         }
     }
 
+    /// Load credentials from `data_dir/auth.json`, creating the manager with that file path.
     pub async fn load_from_file(data_dir: &Path) -> Self {
         let filepath = data_dir.join("auth.json");
         let manager = Self::with_filepath(filepath.clone());
@@ -86,11 +103,13 @@ impl AuthManager {
         manager
     }
 
+    /// Return the stored `AuthInfo` for a provider, or `None` if not present.
     pub async fn get(&self, provider_id: &str) -> Option<AuthInfo> {
         let creds = self.credentials.read().await;
         creds.get(provider_id).cloned()
     }
 
+    /// Store credentials for a provider and persist to disk.
     pub async fn set(&self, provider_id: &str, auth: AuthInfo) {
         {
             let mut creds = self.credentials.write().await;
@@ -101,6 +120,7 @@ impl AuthManager {
         }
     }
 
+    /// Remove credentials for a provider and persist the change to disk.
     pub async fn remove(&self, provider_id: &str) {
         {
             let mut creds = self.credentials.write().await;
@@ -111,11 +131,13 @@ impl AuthManager {
         }
     }
 
+    /// Return `true` if credentials are stored for the given provider.
     pub async fn has_auth(&self, provider_id: &str) -> bool {
         let creds = self.credentials.read().await;
         creds.contains_key(provider_id)
     }
 
+    /// Return the API key for a provider if it is stored as an `Api` credential.
     pub async fn get_api_key(&self, provider_id: &str) -> Option<String> {
         let creds = self.credentials.read().await;
         match creds.get(provider_id) {
@@ -124,6 +146,7 @@ impl AuthManager {
         }
     }
 
+    /// Return the OAuth access token for a provider if it is stored as an `OAuth` credential.
     pub async fn get_oauth_token(&self, provider_id: &str) -> Option<String> {
         let creds = self.credentials.read().await;
         match creds.get(provider_id) {
@@ -132,6 +155,7 @@ impl AuthManager {
         }
     }
 
+    /// Return a snapshot of all stored credentials.
     pub async fn list(&self) -> HashMap<String, AuthInfo> {
         let creds = self.credentials.read().await;
         creds.clone()
@@ -166,6 +190,7 @@ impl Default for AuthManager {
     }
 }
 
+/// Errors that can occur during authentication flows.
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
     #[error("OAuth pending request not found for provider: {0}")]
@@ -181,11 +206,13 @@ pub enum AuthError {
     ApiKeyNotSet(String),
 }
 
+/// Look up the API key for a provider from the conventional `<PROVIDER>_API_KEY` environment variable.
 pub fn get_env_key(provider_id: &str) -> Option<String> {
     let env_var = format!("{}_API_KEY", provider_id.to_uppercase().replace("-", "_"));
     std::env::var(&env_var).ok()
 }
 
+/// Return the API key from the environment, or `default` if the variable is not set.
 pub fn get_env_key_or(provider_id: &str, default: &str) -> String {
     get_env_key(provider_id).unwrap_or_else(|| default.to_string())
 }

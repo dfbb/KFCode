@@ -1,3 +1,4 @@
+//! Together AI provider implementation using the OpenAI-compatible chat completions API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -8,6 +9,7 @@ use crate::{
 
 const TOGETHER_API_URL: &str = "https://api.together.xyz/v1/chat/completions";
 
+/// Provider implementation for Together AI.
 #[derive(Debug)]
 pub struct TogetherProvider {
     client: Client,
@@ -16,6 +18,7 @@ pub struct TogetherProvider {
 }
 
 impl TogetherProvider {
+    /// Create a provider with the given API key.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             client: Client::new(),

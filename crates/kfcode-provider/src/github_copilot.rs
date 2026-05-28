@@ -1,3 +1,4 @@
+//! GitHub Copilot provider implementation supporting both chat completions and the Responses API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -50,12 +51,14 @@ where
     }
 }
 
+/// Configuration for the GitHub Copilot provider.
 #[derive(Debug, Clone)]
 pub struct GitHubCopilotConfig {
     pub oauth_token: String,
     pub base_url: Option<String>,
 }
 
+/// Provider implementation for GitHub Copilot.
 #[derive(Debug)]
 pub struct GitHubCopilotProvider {
     client: Client,
@@ -64,6 +67,7 @@ pub struct GitHubCopilotProvider {
 }
 
 impl GitHubCopilotProvider {
+    /// Create a provider with the given OAuth token and default settings.
     pub fn new(oauth_token: impl Into<String>) -> Self {
         Self::with_config(GitHubCopilotConfig {
             oauth_token: oauth_token.into(),
@@ -71,6 +75,7 @@ impl GitHubCopilotProvider {
         })
     }
 
+    /// Create a provider with a fully specified `GitHubCopilotConfig`.
     pub fn with_config(config: GitHubCopilotConfig) -> Self {
         let models = vec![
             ModelInfo {

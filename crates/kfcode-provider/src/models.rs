@@ -1,11 +1,14 @@
+//! models.dev registry types, the `ModelsRegistry` async cache, and model lookup helpers.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Base URL for the models.dev API.
 pub const MODELS_DEV_URL: &str = "https://models.dev";
 
+/// Per-token pricing for a model, in USD per million tokens.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelCost {
     pub input: f64,
@@ -18,6 +21,7 @@ pub struct ModelCost {
     pub context_over_200k: Option<Box<ModelCost>>,
 }
 
+/// Token limits for a model (context window, optional input cap, and max output).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelLimit {
     pub context: u64,
@@ -26,12 +30,14 @@ pub struct ModelLimit {
     pub output: u64,
 }
 
+/// Supported input and output modalities for a model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelModalities {
     pub input: Vec<String>,
     pub output: Vec<String>,
 }
 
+/// Provider-specific routing metadata for a model (npm package and API identifier).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelProvider {
     #[serde(default)]
@@ -40,6 +46,7 @@ pub struct ModelProvider {
     pub api: Option<String>,
 }
 
+/// Interleaved thinking configuration: either a boolean flag or a named provider field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ModelInterleaved {
@@ -47,6 +54,7 @@ pub enum ModelInterleaved {
     Field { field: String },
 }
 
+/// Full model descriptor as returned by the models.dev API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
     pub id: String,
@@ -84,6 +92,7 @@ pub struct ModelInfo {
     pub variants: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
 }
 
+/// Provider descriptor as returned by the models.dev API, including its model catalog.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderInfo {
     #[serde(default)]
@@ -96,14 +105,17 @@ pub struct ProviderInfo {
     pub models: HashMap<String, ModelInfo>,
 }
 
+/// The full models.dev dataset: a map from provider ID to `ProviderInfo`.
 pub type ModelsData = HashMap<String, ProviderInfo>;
 
+/// Async cache for the models.dev dataset, backed by a local JSON file.
 pub struct ModelsRegistry {
     data: Arc<RwLock<Option<ModelsData>>>,
     cache_path: PathBuf,
 }
 
 impl ModelsRegistry {
+    /// Create a registry backed by the given cache file path.
     pub fn new(cache_path: PathBuf) -> Self {
         Self {
             data: Arc::new(RwLock::new(None)),
@@ -111,6 +123,7 @@ impl ModelsRegistry {
         }
     }
 
+    /// Return the cached dataset, loading from disk or fetching from the network if needed.
     pub async fn get(&self) -> ModelsData {
         let data = self.data.read().await;
         if let Some(ref d) = *data {
@@ -160,21 +173,25 @@ impl ModelsRegistry {
         HashMap::new()
     }
 
+    /// Force a fresh fetch from the network and update the in-memory cache.
     pub async fn refresh(&self) {
         self.fetch().await;
     }
 
+    /// Return the `ProviderInfo` for a provider ID, or `None` if not found.
     pub async fn get_provider(&self, provider_id: &str) -> Option<ProviderInfo> {
         let data = self.get().await;
         data.get(provider_id).cloned()
     }
 
+    /// Return the `ModelInfo` for a specific provider and model ID, or `None` if not found.
     pub async fn get_model(&self, provider_id: &str, model_id: &str) -> Option<ModelInfo> {
         let data = self.get().await;
         data.get(provider_id)
             .and_then(|p| p.models.get(model_id).cloned())
     }
 
+    /// Return all models for a provider, or an empty vec if the provider is not found.
     pub async fn list_models_for_provider(&self, provider_id: &str) -> Vec<ModelInfo> {
         let data = self.get().await;
         data.get(provider_id)
@@ -182,7 +199,7 @@ impl ModelsRegistry {
             .unwrap_or_default()
     }
 
-    /// Apply custom loaders and filtering to the loaded models data
+    /// Return the dataset after applying custom loaders and status filtering.
     pub async fn get_with_customization(&self, enable_experimental: bool) -> ModelsData {
         let mut data = self.get().await;
         crate::bootstrap::apply_custom_loaders(&mut data);
@@ -201,10 +218,12 @@ impl Default for ModelsRegistry {
     }
 }
 
+/// Return a `(max_output_tokens, context_window)` pair for a model ID using heuristic matching.
 pub fn default_model_limits() -> (u64, u64) {
     (4096, 128000)
 }
 
+/// Return the context window size for a model ID using heuristic name matching.
 pub fn get_model_context_limit(model_id: &str) -> u64 {
     let lower = model_id.to_lowercase();
 
@@ -240,6 +259,7 @@ pub fn get_model_context_limit(model_id: &str) -> u64 {
     128000
 }
 
+/// Return `true` if the model ID is known to support vision input.
 pub fn supports_vision(model_id: &str) -> bool {
     let lower = model_id.to_lowercase();
 
@@ -250,6 +270,7 @@ pub fn supports_vision(model_id: &str) -> bool {
         || lower.contains("qwen-vl")
 }
 
+/// Return `true` if the model ID is expected to support function calling.
 pub fn supports_function_calling(model_id: &str) -> bool {
     let lower = model_id.to_lowercase();
 

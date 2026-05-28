@@ -1,3 +1,9 @@
+//! MCP client and multi-server registry.
+//!
+//! `McpClient` manages a single server connection (stdio, HTTP, or SSE) and
+//! exposes tool-call and resource-read operations. `McpClientRegistry` owns a
+//! collection of clients and handles connect/disconnect/restart lifecycle.
+
 use chrono::Utc;
 use kfcode_core::bus::{Bus, BusEventDef};
 use std::collections::HashMap;
@@ -22,22 +28,30 @@ use crate::transport::{HttpTransport, McpTransport, SseTransport, StdioTransport
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum McpStatus {
+    /// The server is reachable and the MCP handshake completed successfully.
     Connected,
+    /// The server is intentionally not connected (e.g., user-disabled).
     Disabled,
+    /// The connection attempt failed; the error message is included.
     Failed { error: String },
+    /// The server requires OAuth authorization before a connection can proceed.
     NeedsAuth,
+    /// The server requires dynamic client registration before authorization.
     NeedsClientRegistration { error: String },
 }
 
 impl McpStatus {
+    /// Return `true` if the status is `Connected`.
     pub fn is_connected(&self) -> bool {
         matches!(self, McpStatus::Connected)
     }
 
+    /// Return `true` if the status is `Failed`.
     pub fn is_failed(&self) -> bool {
         matches!(self, McpStatus::Failed { .. })
     }
 
+    /// Return `true` if the status is `NeedsAuth`.
     pub fn is_needs_auth(&self) -> bool {
         matches!(self, McpStatus::NeedsAuth)
     }
@@ -61,29 +75,38 @@ impl std::fmt::Display for McpStatus {
 // Error type
 // ---------------------------------------------------------------------------
 
+/// Errors that can occur during MCP client operations.
 #[derive(Debug, thiserror::Error)]
 pub enum McpClientError {
+    /// An I/O or network-level failure on the underlying transport.
     #[error("Transport error: {0}")]
     TransportError(String),
 
+    /// A JSON-RPC framing or serialization error.
     #[error("Protocol error: {0}")]
     ProtocolError(String),
 
+    /// The MCP server returned a JSON-RPC error response.
     #[error("Server error: {0}")]
     ServerError(String),
 
+    /// A method was called before the MCP handshake completed.
     #[error("Not initialized")]
     NotInitialized,
 
+    /// The requested tool name was not found in the server's tool list.
     #[error("Tool not found: {0}")]
     ToolNotFound(String),
 
+    /// The request exceeded the configured timeout.
     #[error("Timeout")]
     Timeout,
 
+    /// The server returned HTTP 401 or equivalent; OAuth flow is required.
     #[error("Unauthorized")]
     Unauthorized,
 
+    /// An error occurred during the OAuth token exchange or refresh.
     #[error("OAuth error: {0}")]
     OAuthError(String),
 }
@@ -92,6 +115,7 @@ pub enum McpClientError {
 // McpServerConfig
 // ---------------------------------------------------------------------------
 
+/// Configuration for a stdio-based MCP server process.
 #[derive(Debug, Clone)]
 pub struct McpServerConfig {
     pub name: String,
@@ -120,6 +144,7 @@ enum RegistryConnectionConfig {
 // McpClient
 // ---------------------------------------------------------------------------
 
+/// Client for a single MCP server, managing transport, tool registry, and status.
 pub struct McpClient {
     server_name: String,
     transport: Mutex<Option<Box<dyn McpTransport>>>,
@@ -135,9 +160,11 @@ pub struct McpClient {
     tools_changed: std::sync::atomic::AtomicBool,
 }
 
+/// Bus event published when an MCP server's tool list changes.
 pub static MCP_TOOLS_CHANGED_EVENT: BusEventDef = BusEventDef::new("mcp.tools.changed");
 
 impl McpClient {
+    /// Create a new, unconnected client for the given server name.
     pub fn new(server_name: String, tool_registry: Arc<McpToolRegistry>) -> Self {
         Self {
             server_name,
@@ -154,11 +181,13 @@ impl McpClient {
         }
     }
 
+    /// Override the default 30-second request timeout (milliseconds).
     pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
         self.timeout_ms = timeout_ms;
         self
     }
 
+    /// Attach an event bus so tool-change events can be published.
     pub fn with_bus(mut self, bus: Arc<Bus>) -> Self {
         self.bus = Some(bus);
         self
@@ -172,10 +201,12 @@ impl McpClient {
 
     // -- Status accessors ----------------------------------------------------
 
+    /// Return the current connection status of this client.
     pub async fn status(&self) -> McpStatus {
         self.status.read().await.clone()
     }
 
+    /// Set the connection status of this client.
     pub async fn set_status(&self, status: McpStatus) {
         let mut guard = self.status.write().await;
         *guard = status;
@@ -219,6 +250,7 @@ impl McpClient {
 
     // -- Connection methods ---------------------------------------------------
 
+    /// Connect to the server over stdio and run the MCP handshake.
     pub async fn connect_stdio(&self, config: McpServerConfig) -> Result<(), McpClientError> {
         let result = self.connect_stdio_inner(config).await;
         match &result {
@@ -243,6 +275,7 @@ impl McpClient {
         self.load_tools().await?;
         Ok(())
     }
+    /// Connect to the server over StreamableHTTP and run the MCP handshake.
     pub async fn connect_http(
         &self,
         url: String,
@@ -298,6 +331,7 @@ impl McpClient {
         self.load_tools().await?;
         Ok(())
     }
+    /// Connect to the server over SSE and run the MCP handshake.
     pub async fn connect_sse(
         &self,
         url: String,
@@ -561,6 +595,7 @@ impl McpClient {
         Ok(())
     }
 
+    /// Invoke a named tool on the server and return its result.
     pub async fn call_tool(
         &self,
         name: &str,
@@ -593,6 +628,7 @@ impl McpClient {
         Ok(result)
     }
 
+    /// Read a resource by URI from the server.
     pub async fn read_resource(&self, uri: &str) -> Result<ReadResourceResult, McpClientError> {
         let params = ReadResourceParams {
             uri: uri.to_string(),
@@ -619,6 +655,7 @@ impl McpClient {
         Ok(result)
     }
 
+    /// Close the transport, clear registered tools, and set status to `Disabled`.
     pub async fn close(&self) -> Result<(), McpClientError> {
         let mut transport = self.transport.lock().await;
         if let Some(t) = transport.as_ref() {
@@ -632,10 +669,12 @@ impl McpClient {
         Ok(())
     }
 
+    /// Return the server name this client was created with.
     pub fn server_name(&self) -> &str {
         &self.server_name
     }
 
+    /// Return `true` if the MCP handshake has completed successfully.
     pub async fn is_initialized(&self) -> bool {
         *self.initialized.read().await
     }
@@ -645,6 +684,7 @@ impl McpClient {
 // McpClientRegistry
 // ---------------------------------------------------------------------------
 
+/// Registry that owns and manages a collection of `McpClient` instances.
 pub struct McpClientRegistry {
     clients: RwLock<HashMap<String, Arc<McpClient>>>,
     tool_registry: Arc<McpToolRegistry>,
@@ -656,6 +696,7 @@ pub struct McpClientRegistry {
     logs: RwLock<HashMap<String, Vec<String>>>,
 }
 impl McpClientRegistry {
+    /// Create an empty registry with no connected servers.
     pub fn new() -> Self {
         Self {
             clients: RwLock::new(HashMap::new()),
@@ -667,6 +708,7 @@ impl McpClientRegistry {
         }
     }
 
+    /// Attach an event bus so tool-change events can be forwarded to clients.
     pub fn with_bus(mut self, bus: Arc<Bus>) -> Self {
         self.bus = Some(bus);
         self
@@ -708,6 +750,7 @@ impl McpClientRegistry {
 
     // -- Client management ---------------------------------------------------
 
+    /// Connect a new stdio-based server and add it to the registry.
     pub async fn add_stdio(
         &self,
         config: McpServerConfig,
@@ -745,6 +788,7 @@ impl McpClientRegistry {
             }
         }
     }
+    /// Connect a new HTTP-based server and add it to the registry.
     pub async fn add_http(
         &self,
         name: String,
@@ -788,6 +832,7 @@ impl McpClientRegistry {
         }
     }
 
+    /// Connect a new SSE-based server and add it to the registry.
     pub async fn add_sse(
         &self,
         name: String,
@@ -839,10 +884,12 @@ impl McpClientRegistry {
         self.add_stdio(config).await
     }
 
+    /// Look up a connected client by server name.
     pub async fn get(&self, name: &str) -> Option<Arc<McpClient>> {
         self.clients.read().await.get(name).cloned()
     }
 
+    /// Disconnect and remove a server from the registry.
     pub async fn remove(&self, name: &str) -> Result<(), McpClientError> {
         let client = self.clients.write().await.remove(name);
         if let Some(client) = client {
@@ -853,6 +900,7 @@ impl McpClientRegistry {
         Ok(())
     }
 
+    /// Return all connected clients as `(name, client)` pairs.
     pub async fn list(&self) -> Vec<(String, Arc<McpClient>)> {
         self.clients
             .read()
@@ -862,10 +910,12 @@ impl McpClientRegistry {
             .collect()
     }
 
+    /// Return the shared tool registry used by all clients in this registry.
     pub fn tool_registry(&self) -> Arc<McpToolRegistry> {
         self.tool_registry.clone()
     }
 
+    /// Return timestamped log lines recorded for a server.
     pub async fn get_logs(&self, name: &str) -> Vec<String> {
         self.logs
             .read()
@@ -875,6 +925,7 @@ impl McpClientRegistry {
             .unwrap_or_default()
     }
 
+    /// Close and reconnect a server using its stored connection configuration.
     pub async fn restart(&self, name: &str) -> Result<Arc<McpClient>, McpClientError> {
         self.log_event(name, "Restart requested").await;
 

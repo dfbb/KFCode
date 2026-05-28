@@ -1,3 +1,4 @@
+//! Google Gemini provider implementation using the Generative Language API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -10,12 +11,14 @@ use crate::{
 
 const GOOGLE_API_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
+/// Configuration for the Google Gemini provider.
 #[derive(Debug, Clone)]
 pub struct GoogleConfig {
     pub api_key: String,
     pub base_url: Option<String>,
 }
 
+/// Provider implementation for Google Gemini.
 #[derive(Debug)]
 pub struct GoogleProvider {
     client: Client,
@@ -24,6 +27,7 @@ pub struct GoogleProvider {
 }
 
 impl GoogleProvider {
+    /// Create a provider with the given API key and default settings.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self::with_config(GoogleConfig {
             api_key: api_key.into(),
@@ -31,6 +35,7 @@ impl GoogleProvider {
         })
     }
 
+    /// Create a provider with a fully specified `GoogleConfig`.
     pub fn with_config(config: GoogleConfig) -> Self {
         let models = vec![
             ModelInfo {

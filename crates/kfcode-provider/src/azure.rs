@@ -1,3 +1,4 @@
+//! Azure OpenAI Service provider implementation.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -7,6 +8,7 @@ use crate::{
     ChatRequest, ChatResponse, ModelInfo, Provider, ProviderError, StreamEvent, StreamResult,
 };
 
+/// Configuration for the Azure OpenAI Service provider.
 #[derive(Debug, Clone)]
 pub struct AzureConfig {
     pub api_key: String,
@@ -15,6 +17,7 @@ pub struct AzureConfig {
     pub api_version: Option<String>,
 }
 
+/// Provider implementation for Azure OpenAI Service.
 #[derive(Debug)]
 pub struct AzureProvider {
     client: Client,
@@ -23,6 +26,7 @@ pub struct AzureProvider {
 }
 
 impl AzureProvider {
+    /// Create a provider with the given API key and endpoint URL.
     pub fn new(api_key: impl Into<String>, endpoint: impl Into<String>) -> Self {
         Self::with_config(AzureConfig {
             api_key: api_key.into(),

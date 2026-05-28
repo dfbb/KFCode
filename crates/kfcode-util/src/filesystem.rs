@@ -1,14 +1,19 @@
+//! Async filesystem utilities for path inspection, normalisation, and directory traversal.
+
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use walkdir::WalkDir;
 
+/// A stateless collection of async filesystem helper methods.
 pub struct Filesystem;
 
 impl Filesystem {
+    /// Returns `true` if the path exists (file or directory).
     pub async fn exists<P: AsRef<Path>>(p: P) -> bool {
         fs::metadata(p).await.is_ok()
     }
 
+    /// Returns `true` if the path exists and is a directory.
     pub async fn is_dir<P: AsRef<Path>>(p: P) -> bool {
         match fs::metadata(p).await {
             Ok(m) => m.is_dir(),
@@ -16,6 +21,7 @@ impl Filesystem {
         }
     }
 
+    /// Returns `true` if the path exists and is a regular file.
     pub async fn is_file<P: AsRef<Path>>(p: P) -> bool {
         match fs::metadata(p).await {
             Ok(m) => m.is_file(),
@@ -23,17 +29,23 @@ impl Filesystem {
         }
     }
 
+    /// Canonicalises the path string on Windows, resolving symlinks and UNC prefixes.
+    ///
+    /// # Errors
+    /// Returns an `io::Error` if the path does not exist or cannot be canonicalised.
     #[cfg(windows)]
     pub fn normalize_path(p: &str) -> std::io::Result<String> {
         use std::fs;
         fs::canonicalize(p).map(|p| p.to_string_lossy().to_string())
     }
 
+    /// Returns the path string unchanged on non-Windows platforms.
     #[cfg(not(windows))]
     pub fn normalize_path(p: &str) -> String {
         p.to_string()
     }
 
+    /// Returns `true` if path `a` and path `b` overlap (one is an ancestor of the other or they are equal).
     pub fn overlaps(a: &str, b: &str) -> bool {
         let path_a = Path::new(a);
         let path_b = Path::new(b);
@@ -50,6 +62,7 @@ impl Filesystem {
             || rel_b_str.is_empty()
     }
 
+    /// Returns `true` if `child` is located inside `parent` (or is the same path).
     pub fn contains(parent: &str, child: &str) -> bool {
         let parent_path = Path::new(parent);
         let child_path = Path::new(child);
@@ -57,6 +70,10 @@ impl Filesystem {
         child_path.strip_prefix(parent_path).is_ok()
     }
 
+    /// Walks up the directory tree from `start`, collecting every path where `target` exists.
+    ///
+    /// Stops at `stop` if provided, or at the filesystem root. Returns all matches in
+    /// bottom-up order.
     pub async fn find_up<P: AsRef<Path>>(target: &str, start: P, stop: Option<P>) -> Vec<PathBuf> {
         let mut current = start.as_ref().to_path_buf();
         let stop = stop.map(|s| s.as_ref().to_path_buf());
@@ -83,6 +100,10 @@ impl Filesystem {
         result
     }
 
+    /// Walks up the directory tree from `start`, collecting files in each directory that match `pattern`.
+    ///
+    /// Only the immediate contents of each directory (depth 1) are checked against the glob.
+    /// Stops at `stop` if provided, or at the filesystem root.
     pub async fn glob_up<P: AsRef<Path>>(pattern: &str, start: P, stop: Option<P>) -> Vec<PathBuf> {
         let mut current = start.as_ref().to_path_buf();
         let stop = stop.map(|s| s.as_ref().to_path_buf());

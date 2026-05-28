@@ -1,3 +1,4 @@
+//! Retry logic with exponential backoff and `Retry-After` header support.
 use std::collections::HashMap;
 use std::future::Future;
 use tokio::sync::watch;
@@ -7,15 +8,20 @@ use tracing::warn;
 // Constants (ported from SessionRetry namespace)
 // ---------------------------------------------------------------------------
 
+/// Initial retry delay in milliseconds.
 pub const RETRY_INITIAL_DELAY: u64 = 2000;
+/// Exponential backoff multiplier applied on each retry.
 pub const RETRY_BACKOFF_FACTOR: u64 = 2;
+/// Maximum retry delay in milliseconds when no `Retry-After` header is present.
 pub const RETRY_MAX_DELAY_NO_HEADERS: u64 = 30_000;
+/// Absolute maximum retry delay in milliseconds (used when headers are present).
 pub const RETRY_MAX_DELAY: u64 = 2_147_483_647;
 
 // ---------------------------------------------------------------------------
 // RetryConfig
 // ---------------------------------------------------------------------------
 
+/// Configuration for the retry loop.
 #[derive(Debug, Clone)]
 pub struct RetryConfig {
     pub max_attempts: u32,

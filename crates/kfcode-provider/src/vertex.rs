@@ -1,3 +1,4 @@
+//! Google Vertex AI provider implementation using the Vertex AI Generative Language API.
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -10,6 +11,7 @@ use crate::{
 
 const VERTEX_API_BASE: &str = "https://aiplatform.googleapis.com/v1";
 
+/// Configuration for the Google Vertex AI provider.
 #[derive(Debug, Clone)]
 pub struct VertexConfig {
     pub access_token: String,
@@ -18,6 +20,7 @@ pub struct VertexConfig {
     pub base_url: Option<String>,
 }
 
+/// Provider implementation for Google Vertex AI.
 #[derive(Debug)]
 pub struct GoogleVertexProvider {
     client: Client,
@@ -26,6 +29,7 @@ pub struct GoogleVertexProvider {
 }
 
 impl GoogleVertexProvider {
+    /// Create a provider with the given access token, project ID, and location.
     pub fn new(
         access_token: impl Into<String>,
         project_id: impl Into<String>,
@@ -39,6 +43,7 @@ impl GoogleVertexProvider {
         })
     }
 
+    /// Create a provider with a fully specified `VertexConfig`.
     pub fn with_config(config: VertexConfig) -> Self {
         let models = vec![
             ModelInfo {

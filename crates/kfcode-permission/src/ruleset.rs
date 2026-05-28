@@ -1,12 +1,18 @@
+//! Permission rule types and ruleset construction, evaluation, and merging utilities.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// The decision outcome for a matched permission rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PermissionAction {
+    /// Permit the operation without prompting.
     #[serde(rename = "allow")]
     Allow,
+    /// Block the operation outright.
     #[serde(rename = "deny")]
     Deny,
+    /// Pause and ask the user before proceeding.
     #[serde(rename = "ask")]
     Ask,
 }
@@ -17,6 +23,7 @@ impl Default for PermissionAction {
     }
 }
 
+/// A single permission rule binding a permission name, a glob pattern, and an action.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionRule {
     pub permission: String,
@@ -24,15 +31,20 @@ pub struct PermissionRule {
     pub action: PermissionAction,
 }
 
+/// An ordered list of permission rules evaluated last-wins.
 pub type PermissionRuleset = Vec<PermissionRule>;
 
+/// A config-file value for a permission key: either a flat action or a map of patterns to actions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ConfigValue {
+    /// Apply the same action to all patterns for this permission.
     Action(PermissionAction),
+    /// Apply per-pattern actions for this permission.
     Patterns(HashMap<String, PermissionAction>),
 }
 
+/// Raw permission configuration keyed by permission name, as read from a config file.
 pub type ConfigPermission = HashMap<String, ConfigValue>;
 
 fn expand(pattern: &str) -> String {
@@ -50,6 +62,10 @@ fn expand(pattern: &str) -> String {
     pattern.to_string()
 }
 
+/// Converts a `ConfigPermission` map into a flat `PermissionRuleset`.
+///
+/// Each flat action becomes a wildcard rule; each pattern map entry becomes one rule per pattern.
+/// Home-directory shorthands (`~`, `~/`, `$HOME/`) in patterns are expanded to absolute paths.
 pub fn from_config(permission: &ConfigPermission) -> PermissionRuleset {
     let mut ruleset: PermissionRuleset = Vec::new();
 
@@ -77,10 +93,15 @@ pub fn from_config(permission: &ConfigPermission) -> PermissionRuleset {
     ruleset
 }
 
+/// Concatenates multiple rulesets into a single flat list preserving order.
 pub fn merge(rulesets: &[PermissionRuleset]) -> PermissionRuleset {
     rulesets.iter().flat_map(|r| r.clone()).collect()
 }
 
+/// Evaluates a permission request against the merged rulesets and returns the matching rule.
+///
+/// Rules are evaluated in reverse order (last-wins). If no rule matches, returns a default
+/// `Ask` rule with a wildcard pattern.
 pub fn evaluate(permission: &str, pattern: &str, rulesets: &[PermissionRuleset]) -> PermissionRule {
     let merged = merge(rulesets);
 
@@ -97,6 +118,11 @@ pub fn evaluate(permission: &str, pattern: &str, rulesets: &[PermissionRuleset])
 
 const EDIT_TOOLS: &[&str] = &["edit", "write", "patch", "multiedit"];
 
+/// Returns the set of tool names that are globally denied by the ruleset.
+///
+/// A tool is considered disabled when the ruleset contains a wildcard-pattern `Deny` rule
+/// for its permission name. Edit-family tools (`edit`, `write`, `patch`, `multiedit`) are
+/// all mapped to the `"edit"` permission before lookup.
 pub fn disabled(
     tools: &[String],
     ruleset: &PermissionRuleset,
@@ -148,6 +174,11 @@ fn wildcard_match(text: &str, pattern: &str) -> bool {
     text == pattern
 }
 
+/// Builds the baseline ruleset used when no agent-specific overrides apply.
+///
+/// Allows all operations by default, then restricts `doom_loop`, `external_directory`,
+/// `question`, and `plan_enter`/`plan_exit` to `Ask` or `Deny`, and requires confirmation
+/// before reading `.env` files.
 pub fn default_ruleset() -> PermissionRuleset {
     let mut rules = Vec::new();
 
@@ -208,6 +239,10 @@ pub fn default_ruleset() -> PermissionRuleset {
     rules
 }
 
+/// Builds a merged ruleset for a named agent by layering agent-specific rules over the defaults.
+///
+/// Recognized agent names are `"build"`, `"plan"`, and `"explore"`. Any other name receives
+/// only the default rules merged with the caller-supplied user rules.
 pub fn build_agent_ruleset(agent_name: &str, user_ruleset: &[PermissionRule]) -> PermissionRuleset {
     let defaults = default_ruleset();
     let user = user_ruleset.to_vec();
