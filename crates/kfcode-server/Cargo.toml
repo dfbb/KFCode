@@ -1,0 +1,36 @@
+[package]
+name = "kfcode-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+kfcode-core = { path = "../kfcode-core" }
+kfcode-agent = { path = "../kfcode-agent" }
+kfcode-provider = { path = "../kfcode-provider" }
+kfcode-session = { path = "../kfcode-session" }
+kfcode-storage = { path = "../kfcode-storage" }
+kfcode-types = { path = "../kfcode-types" }
+kfcode-config = { path = "../kfcode-config" }
+kfcode-mcp = { path = "../kfcode-mcp" }
+kfcode-plugin = { path = "../kfcode-plugin" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+axum = { version = "0.8", features = ["ws"] }
+axum-extra = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
+tokio-tungstenite = "0.26"
+dirs = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+once_cell = { workspace = true }
+portable-pty = { workspace = true }

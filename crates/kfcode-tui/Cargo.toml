@@ -1,0 +1,46 @@
+[package]
+name = "kfcode-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Workspace dependencies
+kfcode-core = { path = "../kfcode-core" }
+kfcode-util = { path = "../kfcode-util" }
+kfcode-config = { path = "../kfcode-config" }
+kfcode-provider = { path = "../kfcode-provider" }
+kfcode-session = { path = "../kfcode-session" }
+kfcode-agent = { path = "../kfcode-agent" }
+kfcode-tool = { path = "../kfcode-tool" }
+kfcode-mcp = { path = "../kfcode-mcp" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+chrono = { workspace = true }
+once_cell = { workspace = true }
+walkdir = { workspace = true }
+syntect = { workspace = true }
+
+# TUI dependencies
+ratatui = "0.27"
+crossterm = { version = "0.27", features = ["event-stream"] }
+atty = "0.2"
+nucleo-matcher = { workspace = true }
+similar = { workspace = true }
+
+# Additional dependencies
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+unicode-width = "0.1"
+uuid = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }
+dirs = { workspace = true }
+base64 = { workspace = true }
+pulldown-cmark = "0.13"

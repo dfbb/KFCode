@@ -1,0 +1,42 @@
+[package]
+name = "kfcode-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kfcode"
+path = "src/main.rs"
+
+[dependencies]
+kfcode-core = { path = "../kfcode-core" }
+kfcode-util = { path = "../kfcode-util" }
+kfcode-config = { path = "../kfcode-config" }
+kfcode-grep = { path = "../kfcode-grep" }
+kfcode-permission = { path = "../kfcode-permission" }
+kfcode-server = { path = "../kfcode-server" }
+kfcode-agent = { path = "../kfcode-agent" }
+kfcode-provider = { path = "../kfcode-provider" }
+kfcode-plugin = { path = "../kfcode-plugin" }
+kfcode-session = { path = "../kfcode-session" }
+kfcode-storage = { path = "../kfcode-storage" }
+kfcode-tool = { path = "../kfcode-tool" }
+kfcode-tui = { path = "../kfcode-tui" }
+kfcode-types = { path = "../kfcode-types" }
+kfcode-command = { path = "../kfcode-command" }
+kfcode-lsp = { path = "../kfcode-lsp" }
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+sqlx = { workspace = true }
+url = { workspace = true }
+which = { workspace = true }

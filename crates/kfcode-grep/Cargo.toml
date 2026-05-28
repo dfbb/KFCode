@@ -1,0 +1,15 @@
+[package]
+name = "kfcode-grep"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+kfcode-core = { path = "../kfcode-core" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+walkdir = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }

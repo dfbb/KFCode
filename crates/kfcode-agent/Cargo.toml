@@ -1,0 +1,23 @@
+[package]
+name = "kfcode-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+kfcode-core = { path = "../kfcode-core" }
+kfcode-provider = { path = "../kfcode-provider" }
+kfcode-permission = { path = "../kfcode-permission" }
+kfcode-tool = { path = "../kfcode-tool" }
+kfcode-config = { path = "../kfcode-config" }
+kfcode-plugin = { path = "../kfcode-plugin" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
