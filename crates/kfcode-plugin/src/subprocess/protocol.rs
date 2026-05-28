@@ -10,6 +10,7 @@ use serde_json::Value;
 // JSON-RPC envelope
 // ---------------------------------------------------------------------------
 
+/// A JSON-RPC 2.0 request sent from Rust to the plugin host.
 #[derive(Debug, Serialize)]
 pub struct RpcRequest {
     pub jsonrpc: &'static str,
@@ -20,6 +21,7 @@ pub struct RpcRequest {
 }
 
 impl RpcRequest {
+    /// Construct a request with the given `id`, `method`, and optional `params`.
     pub fn new(id: u64, method: impl Into<String>, params: Option<Value>) -> Self {
         Self {
             jsonrpc: "2.0",
@@ -30,6 +32,7 @@ impl RpcRequest {
     }
 }
 
+/// A JSON-RPC 2.0 response received from the plugin host.
 #[derive(Debug, Deserialize)]
 pub struct RpcResponse {
     #[allow(dead_code)]
@@ -39,12 +42,14 @@ pub struct RpcResponse {
     pub error: Option<RpcError>,
 }
 
+/// A JSON-RPC 2.0 error object embedded in a response.
 #[derive(Debug, Deserialize)]
 pub struct RpcError {
     pub code: i64,
     pub message: String,
 }
 
+/// A JSON-RPC 2.0 notification (no `id`) sent from the plugin host to Rust.
 #[derive(Debug, Deserialize)]
 pub struct RpcNotification {
     #[allow(dead_code)]

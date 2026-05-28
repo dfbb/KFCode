@@ -1,3 +1,9 @@
+//! Core plugin system for kfcode: hook registration, dispatch, and the global plugin registry.
+//!
+//! Provides `PluginSystem` for managing typed hook handlers, `PluginRegistry` for
+//! tracking loaded plugins, and convenience free functions for triggering hooks on
+//! the process-wide singleton.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -6,8 +12,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Subprocess-based TypeScript plugin support.
 pub mod subprocess;
 
+/// The output produced by a hook handler.
+///
+/// Wraps an optional JSON payload that the hook may return to the caller.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HookOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -15,6 +25,7 @@ pub struct HookOutput {
 }
 
 impl HookOutput {
+    /// Construct a `HookOutput` carrying the given JSON payload.
     pub fn with_payload(payload: serde_json::Value) -> Self {
         Self {
             payload: Some(payload),
@@ -34,55 +45,82 @@ impl From<serde_json::Value> for HookOutput {
     }
 }
 
+/// The result type returned by every hook handler.
 pub type HookResult = Result<HookOutput, HookError>;
 
+/// A boxed, type-erased async function that handles a hook invocation.
 pub type HookHandler =
     Box<dyn Fn(HookContext) -> Pin<Box<dyn Future<Output = HookResult> + Send>> + Send + Sync>;
 
+/// All lifecycle events that plugins can subscribe to.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum HookEvent {
     // Original events
+    /// Fired after the application configuration has been loaded.
     ConfigLoaded,
+    /// Fired when a new session begins.
     SessionStart,
+    /// Fired when a session ends.
     SessionEnd,
+    /// Fired when a tool is called.
     ToolCall,
+    /// Fired when a tool returns a result.
     ToolResult,
+    /// Fired when a message is sent to the LLM.
     MessageSent,
+    /// Fired when a message is received from the LLM.
     MessageReceived,
+    /// Fired when an error occurs.
     Error,
+    /// Fired when a file changes on disk.
     FileChange,
+    /// Fired when the active LLM provider changes.
     ProviderChange,
 
     // Tool lifecycle hooks (matches TS "tool.execute.before" / "tool.execute.after")
+    /// Fired before a tool executes; allows argument mutation.
     ToolExecuteBefore,
+    /// Fired after a tool executes; allows output mutation.
     ToolExecuteAfter,
 
     // Tool definition transform (matches TS "tool.definition")
+    /// Fired when tool definitions are assembled; allows description/parameter mutation.
     ToolDefinition,
 
     // Chat / LLM hooks
+    /// Fired to allow mutation of the system prompt before an LLM call.
     ChatSystemTransform,
+    /// Fired to allow mutation of the message list before an LLM call.
     ChatMessagesTransform,
+    /// Fired to allow mutation of LLM call parameters (temperature, topP, etc.).
     ChatParams,
+    /// Fired to allow injection of custom HTTP headers into an LLM request.
     ChatHeaders,
+    /// Fired when a chat message is produced.
     ChatMessage,
 
     // Session compaction (matches TS "experimental.session.compacting")
+    /// Fired when the session context is being compacted.
     SessionCompacting,
 
     // Text completion (matches TS "experimental.text.complete")
+    /// Fired when a text completion is produced.
     TextComplete,
 
     // Shell environment (matches TS "shell.env")
+    /// Fired to allow injection of environment variables into shell commands.
     ShellEnv,
 
     // Command execution (matches TS "command.execute.before")
+    /// Fired before a slash command executes; allows argument mutation.
     CommandExecuteBefore,
 
     // Permission (matches TS "permission.ask")
+    /// Fired when the runtime asks for user permission; allows auto-approval.
     PermissionAsk,
 }
 
+/// Runtime context passed to every hook handler.
 #[derive(Debug, Clone)]
 pub struct HookContext {
     pub event: HookEvent,
@@ -92,6 +130,7 @@ pub struct HookContext {
 }
 
 impl HookContext {
+    /// Construct a minimal context for the given event, timestamped to now.
     pub fn new(event: HookEvent) -> Self {
         Self {
             event,
@@ -101,33 +140,41 @@ impl HookContext {
         }
     }
 
+    /// Attach an arbitrary JSON value under `key` and return `self` for chaining.
     pub fn with_data(mut self, key: &str, value: serde_json::Value) -> Self {
         self.data.insert(key.to_string(), value);
         self
     }
 
+    /// Attach a session ID and return `self` for chaining.
     pub fn with_session(mut self, session_id: &str) -> Self {
         self.session_id = Some(session_id.to_string());
         self
     }
 
+    /// Look up a data value by key.
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         self.data.get(key)
     }
 }
 
+/// Errors that a hook handler may return.
 #[derive(Debug, thiserror::Error)]
 pub enum HookError {
+    /// The hook handler encountered a runtime failure.
     #[error("Hook execution failed: {0}")]
     ExecutionError(String),
 
+    /// No hook was registered for the requested name.
     #[error("Hook not found: {0}")]
     NotFound(String),
 
+    /// The hook handler did not complete within the allowed time.
     #[error("Hook timeout")]
     Timeout,
 }
 
+/// A registered hook: a named, prioritized async handler bound to a `HookEvent`.
 pub struct Hook {
     pub name: String,
     pub event: HookEvent,
@@ -137,6 +184,10 @@ pub struct Hook {
 }
 
 impl Hook {
+    /// Create a new hook from any async closure whose `Ok` value converts into `HookOutput`.
+    ///
+    /// The handler is wrapped in a type-erased `HookHandler` so it can be stored
+    /// alongside handlers of different concrete types.
     pub fn new<F, Fut, R>(name: &str, event: HookEvent, handler: F) -> Self
     where
         F: Fn(HookContext) -> Fut + Send + Sync + 'static,
@@ -155,28 +206,33 @@ impl Hook {
         }
     }
 
+    /// Set the dispatch priority; higher values run first.
     pub fn with_priority(mut self, priority: i32) -> Self {
         self.priority = priority;
         self
     }
 
+    /// Enable or disable this hook without removing it from the registry.
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
     }
 }
 
+/// Central registry that stores and dispatches hooks, grouped by `HookEvent`.
 pub struct PluginSystem {
     hooks: RwLock<HashMap<HookEvent, Vec<Arc<Hook>>>>,
 }
 
 impl PluginSystem {
+    /// Create an empty plugin system with no registered hooks.
     pub fn new() -> Self {
         Self {
             hooks: RwLock::new(HashMap::new()),
         }
     }
 
+    /// Register a hook, inserting it in priority-descending order.
     pub async fn register(&self, hook: Hook) {
         let mut hooks = self.hooks.write().await;
         let entry = hooks.entry(hook.event.clone()).or_insert_with(Vec::new);
@@ -184,6 +240,7 @@ impl PluginSystem {
         entry.sort_by(|a, b| b.priority.cmp(&a.priority));
     }
 
+    /// Dispatch `context` to all enabled hooks registered for its event.
     pub async fn trigger(&self, context: HookContext) -> Vec<HookResult> {
         let hooks = self.hooks.read().await;
         let mut results = Vec::new();
@@ -201,6 +258,7 @@ impl PluginSystem {
         results
     }
 
+    /// Remove the hook named `name` from `event`'s list. Returns `true` if a hook was removed.
     pub async fn remove(&self, event: &HookEvent, name: &str) -> bool {
         let mut hooks = self.hooks.write().await;
         if let Some(hook_list) = hooks.get_mut(event) {
@@ -211,6 +269,7 @@ impl PluginSystem {
         false
     }
 
+    /// Return a flat list of `(event, hook_name, enabled)` for all registered hooks.
     pub async fn list(&self) -> Vec<(HookEvent, String, bool)> {
         let hooks = self.hooks.read().await;
         let mut result = Vec::new();
@@ -231,6 +290,10 @@ impl Default for PluginSystem {
     }
 }
 
+/// Trait that every plugin must implement.
+///
+/// Implementors must provide a stable name and version string, and register
+/// their hooks into the supplied `PluginSystem` via `register_hooks`.
 pub trait Plugin: Send + Sync {
     fn name(&self) -> &str;
     fn version(&self) -> &str;
@@ -240,12 +303,14 @@ pub trait Plugin: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
+/// Manages a collection of loaded plugins and their shared `PluginSystem`.
 pub struct PluginRegistry {
     plugins: RwLock<Vec<Arc<dyn Plugin>>>,
     hook_system: Arc<PluginSystem>,
 }
 
 impl PluginRegistry {
+    /// Create an empty registry with a fresh `PluginSystem`.
     pub fn new() -> Self {
         Self {
             plugins: RwLock::new(Vec::new()),
@@ -253,16 +318,19 @@ impl PluginRegistry {
         }
     }
 
+    /// Register a plugin, calling its `register_hooks` before storing it.
     pub async fn register(&self, plugin: Arc<dyn Plugin>) {
         plugin.register_hooks(&self.hook_system).await;
         let mut plugins = self.plugins.write().await;
         plugins.push(plugin);
     }
 
+    /// Return the shared `PluginSystem` that all registered plugins write into.
     pub fn hook_system(&self) -> Arc<PluginSystem> {
         self.hook_system.clone()
     }
 
+    /// Return a list of `(name, version)` pairs for all loaded plugins.
     pub async fn list(&self) -> Vec<(String, String)> {
         let plugins = self.plugins.read().await;
         plugins
@@ -282,6 +350,7 @@ impl Default for PluginRegistry {
 // Global Plugin System
 // ============================================================================
 
+/// Process-wide singleton `PluginSystem`, initialized at most once.
 static GLOBAL_PLUGIN_SYSTEM: std::sync::OnceLock<Arc<PluginSystem>> = std::sync::OnceLock::new();
 
 /// Initialize the global plugin system. Call once at startup.

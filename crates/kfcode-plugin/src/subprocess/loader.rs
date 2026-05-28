@@ -24,17 +24,22 @@ const BUILTIN_COPILOT_AUTH: &str = include_str!("../../builtin/copilot-auth.ts")
 // Error type
 // ---------------------------------------------------------------------------
 
+/// Errors returned by `PluginLoader` operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginLoaderError {
+    /// No supported JS runtime (bun, deno, or node) was found on `$PATH`.
     #[error("no JS runtime found (install bun, deno, or node)")]
     NoRuntime,
 
+    /// A filesystem I/O error occurred (e.g. writing the host script to cache).
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// The plugin subprocess failed to start or communicate.
     #[error("subprocess error: {0}")]
     Subprocess(#[from] PluginSubprocessError),
 
+    /// The package manager install step exited with a non-zero status.
     #[error("npm install failed: {0}")]
     NpmInstall(String),
 }
@@ -43,6 +48,10 @@ pub enum PluginLoaderError {
 // PluginLoader
 // ---------------------------------------------------------------------------
 
+/// Discovers, installs, and manages the lifecycle of TypeScript plugin subprocesses.
+///
+/// Each loaded plugin runs as a child process communicating over JSON-RPC.
+/// `PluginLoader` also maintains auth bridges for plugins that declare an auth provider.
 pub struct PluginLoader {
     clients: RwLock<Vec<Arc<PluginSubprocess>>>,
     /// Auth bridges for plugins that declare auth, keyed by provider ID.

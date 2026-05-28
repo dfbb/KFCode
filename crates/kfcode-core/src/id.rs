@@ -1,19 +1,35 @@
+//! Sortable, prefixed unique identifier generation.
+//!
+//! IDs are formatted as `<prefix>_<12-hex-time><14-base62-random>`, where the
+//! time component encodes millisecond timestamps combined with a monotonic counter
+//! so that IDs generated in the same millisecond remain ordered.
 use rand::Rng;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
+// Base-62 alphabet used for the random suffix of generated IDs.
 const BASE62_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+// Total character length of the ID body (after the prefix and underscore).
 const LENGTH: usize = 26;
 
+/// Namespace prefix that is embedded at the start of every generated ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Prefix {
+    /// Identifies a session resource.
     Session,
+    /// Identifies a message resource.
     Message,
+    /// Identifies a permission resource.
     Permission,
+    /// Identifies a question resource.
     Question,
+    /// Identifies a user resource.
     User,
+    /// Identifies a part resource.
     Part,
+    /// Identifies a PTY (pseudo-terminal) resource.
     Pty,
+    /// Identifies a tool resource.
     Tool,
 }
 
@@ -32,7 +48,9 @@ impl Prefix {
     }
 }
 
+// Tracks the last timestamp seen so the counter can be reset on each new millisecond.
 static LAST_TIMESTAMP: AtomicU64 = AtomicU64::new(0);
+// Monotonically increasing counter within a single millisecond to preserve ordering.
 static COUNTER: Mutex<u32> = Mutex::new(0);
 
 fn random_base62(length: usize) -> String {
@@ -51,6 +69,11 @@ fn get_counter() -> u32 {
     *counter
 }
 
+/// Generates a new unique ID string with the given prefix.
+///
+/// When `descending` is `true` the time component is bitwise-inverted so that
+/// lexicographic ordering is newest-first. Pass a `timestamp` (milliseconds since
+/// the Unix epoch) to override the current wall clock, which is useful in tests.
 pub fn create(prefix: Prefix, descending: bool, timestamp: Option<u64>) -> String {
     let current_timestamp = timestamp.unwrap_or_else(|| {
         std::time::SystemTime::now()
@@ -67,6 +90,8 @@ pub fn create(prefix: Prefix, descending: bool, timestamp: Option<u64>) -> Strin
     }
 
     let counter_val = get_counter();
+    // Shift timestamp left by 12 bits and OR in the counter so IDs within the
+    // same millisecond are still strictly ordered.
     let mut now = u64::from(current_timestamp) * 0x1000 + u64::from(counter_val);
 
     if descending {
@@ -84,6 +109,10 @@ pub fn create(prefix: Prefix, descending: bool, timestamp: Option<u64>) -> Strin
     format!("{}_{}{}", prefix.as_str(), hex_time, random_part)
 }
 
+/// Extracts the millisecond Unix timestamp embedded in an ID string.
+///
+/// Returns `None` if `id` does not have the expected `<prefix>_<hex>` structure
+/// or if the hex portion cannot be decoded.
 pub fn timestamp(id: &str) -> Option<u64> {
     let parts: Vec<&str> = id.split('_').collect();
     if parts.len() != 2 {
@@ -92,9 +121,11 @@ pub fn timestamp(id: &str) -> Option<u64> {
 
     let hex = parts[1].get(0..12)?;
     let encoded = u64::from_str_radix(hex, 16).ok()?;
+    // Undo the counter shift to recover the original millisecond timestamp.
     Some(encoded / 0x1000)
 }
 
+/// Returns `true` if `id` starts with the string representation of `expected`.
 pub fn validate_prefix(id: &str, expected: Prefix) -> bool {
     id.starts_with(expected.as_str())
 }

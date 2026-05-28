@@ -1,3 +1,7 @@
+//! File system watcher that monitors directories for create, modify, and remove events,
+//! filters them against configurable glob ignore patterns, and broadcasts them over a
+//! tokio broadcast channel.
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,23 +14,28 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
-/// File change event types
+/// The kind of change that occurred on a watched file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FileEvent {
+    /// A new file was created at the watched path.
     Add,
+    /// An existing file was modified.
     Change,
+    /// A file was removed from the watched path.
     Unlink,
 }
 
-/// A file watcher event
+/// A single file-system event emitted by the watcher, pairing a path with its change kind.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatcherEvent {
+    /// Absolute path of the file that changed.
     pub file: PathBuf,
+    /// The kind of change that was detected.
     pub event: FileEvent,
 }
 
-/// File watcher errors
+/// Errors that can occur while creating or operating the file watcher.
 #[derive(Debug, Error)]
 pub enum WatcherError {
     #[error("Failed to create watcher: {0}")]
@@ -42,14 +51,14 @@ pub enum WatcherError {
     AlreadyWatching(PathBuf),
 }
 
-/// Configuration for the file watcher
+/// Configuration options for a `FileWatcher` instance.
 #[derive(Debug, Clone)]
 pub struct WatcherConfig {
-    /// Paths to ignore (glob patterns)
+    /// Glob patterns for paths that should be silently ignored.
     pub ignore_patterns: Vec<String>,
-    /// Debounce interval for events
+    /// Poll interval in milliseconds used to debounce rapid successive events.
     pub debounce_ms: u64,
-    /// Whether to watch recursively
+    /// Whether to watch directories recursively.
     pub recursive: bool,
 }
 
@@ -71,7 +80,10 @@ impl Default for WatcherConfig {
     }
 }
 
-/// File system watcher
+/// A non-blocking file system watcher that broadcasts change events to subscribers.
+///
+/// Internally wraps a `notify` watcher and filters events through compiled glob patterns
+/// before forwarding them on a tokio broadcast channel.
 pub struct FileWatcher {
     watcher: RwLock<Option<RecommendedWatcher>>,
     watched_paths: DashSet<PathBuf>,
@@ -172,6 +184,9 @@ impl FileWatcher {
         Ok(())
     }
 
+    /// Stops watching the given path and removes it from the active watch set.
+    ///
+    /// If no paths remain after removal the underlying watcher is dropped entirely.
     pub fn unwatch(&self, path: &Path) -> Result<(), WatcherError> {
         self.watched_paths.remove(path);
 
@@ -183,16 +198,19 @@ impl FileWatcher {
         Ok(())
     }
 
+    /// Stops all active watchers and clears the watched-path set.
     pub fn stop(&self) {
         self.watched_paths.clear();
         *self.watcher.write() = None;
         info!("Stopped all file watchers");
     }
 
+    /// Returns a snapshot of all paths currently being watched.
     pub fn watched_paths(&self) -> Vec<PathBuf> {
         self.watched_paths.iter().map(|p| p.clone()).collect()
     }
 
+    /// Returns `true` if the given path is currently in the active watch set.
     pub fn is_watching(&self, path: &Path) -> bool {
         self.watched_paths.contains(path)
     }
@@ -204,8 +222,15 @@ impl Drop for FileWatcher {
     }
 }
 
+/// Process-wide singleton `FileWatcher` initialised on first access.
 static FILE_WATCHER: std::sync::OnceLock<Arc<FileWatcher>> = std::sync::OnceLock::new();
 
+/// Returns the process-wide `FileWatcher`, creating it with default config on first call.
+///
+/// # Panics
+///
+/// Panics if the underlying `FileWatcher` cannot be constructed (e.g. the OS watcher
+/// backend is unavailable).
 pub fn get_watcher() -> Arc<FileWatcher> {
     FILE_WATCHER
         .get_or_init(|| {
@@ -216,6 +241,14 @@ pub fn get_watcher() -> Arc<FileWatcher> {
         .clone()
 }
 
+/// Initialises the process-wide `FileWatcher` with the supplied config and returns it.
+///
+/// If the singleton has already been initialised the existing instance is returned and
+/// `config` is ignored.
+///
+/// # Panics
+///
+/// Panics if the `FileWatcher` cannot be constructed from the given config.
 pub fn init_watcher(config: WatcherConfig) -> Arc<FileWatcher> {
     let watcher = Arc::new(FileWatcher::new(config).expect("Failed to create file watcher"));
     FILE_WATCHER.get_or_init(|| watcher.clone()).clone()

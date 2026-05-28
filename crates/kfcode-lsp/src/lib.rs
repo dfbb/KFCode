@@ -1,3 +1,7 @@
+//! LSP client library for kfcode.
+//! Provides an async JSON-RPC client that spawns an LSP server process and exposes
+//! language-intelligence operations such as diagnostics, completion, and navigation.
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -18,6 +22,7 @@ use tokio::sync::{broadcast, Mutex, RwLock};
 use tracing::{debug, error};
 use url::Url;
 
+/// A single node in a call hierarchy tree, representing a callable symbol in a document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallHierarchyItem {
     pub name: String,
@@ -33,6 +38,7 @@ pub struct CallHierarchyItem {
     pub data: Option<Value>,
 }
 
+/// Parameters for the `textDocument/prepareCallHierarchy` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallHierarchyPrepareParams {
     #[serde(flatten)]
@@ -41,6 +47,7 @@ pub struct CallHierarchyPrepareParams {
     pub work_done_progress_params: lsp_types::WorkDoneProgressParams,
 }
 
+/// Parameters for the `callHierarchy/incomingCalls` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallHierarchyIncomingCallsParams {
     pub item: CallHierarchyItem,
@@ -50,6 +57,7 @@ pub struct CallHierarchyIncomingCallsParams {
     pub partial_result_params: lsp_types::PartialResultParams,
 }
 
+/// Parameters for the `callHierarchy/outgoingCalls` request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallHierarchyOutgoingCallsParams {
     pub item: CallHierarchyItem,
@@ -59,12 +67,14 @@ pub struct CallHierarchyOutgoingCallsParams {
     pub partial_result_params: lsp_types::PartialResultParams,
 }
 
+/// One incoming call edge: the caller symbol and the ranges within it that reference the callee.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallHierarchyIncomingCall {
     pub from: CallHierarchyItem,
     pub from_ranges: Vec<Range>,
 }
 
+/// One outgoing call edge: the callee symbol and the ranges within the caller that invoke it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallHierarchyOutgoingCall {
     pub to: CallHierarchyItem,
@@ -85,30 +95,39 @@ fn uri_to_path(uri: &lsp_types::Uri) -> PathBuf {
         .unwrap_or_default()
 }
 
+/// Errors that can occur while communicating with an LSP server.
 #[derive(Debug, Error)]
 pub enum LspError {
+    /// The LSP server process could not be spawned.
     #[error("Failed to start LSP server: {0}")]
     ServerStartError(String),
 
+    /// The LSP `initialize` handshake failed.
     #[error("Failed to initialize LSP: {0}")]
     InitializeError(String),
 
+    /// The server returned a JSON-RPC error object.
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
+    /// An underlying I/O error occurred.
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
+    /// A JSON serialization or deserialization error occurred.
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 
+    /// A request was sent before the server was initialized.
     #[error("Server not initialized")]
     NotInitialized,
 
+    /// The response channel was dropped before a reply arrived.
     #[error("Timeout waiting for response")]
     Timeout,
 }
 
+/// A JSON-RPC 2.0 request message sent to the LSP server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
@@ -117,6 +136,7 @@ pub struct JsonRpcRequest {
     pub params: Value,
 }
 
+/// A JSON-RPC 2.0 response message received from the LSP server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: String,
@@ -125,6 +145,7 @@ pub struct JsonRpcResponse {
     pub error: Option<JsonRpcError>,
 }
 
+/// A JSON-RPC 2.0 notification message sent to or received from the LSP server (no `id` field).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcNotification {
     pub jsonrpc: String,
@@ -132,6 +153,7 @@ pub struct JsonRpcNotification {
     pub params: Option<Value>,
 }
 
+/// The error object embedded in a failed JSON-RPC response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcError {
     pub code: i32,
@@ -139,6 +161,7 @@ pub struct JsonRpcError {
     pub data: Option<Value>,
 }
 
+/// Configuration required to spawn and identify a single LSP server process.
 pub struct LspServerConfig {
     pub id: String,
     pub command: String,
@@ -146,6 +169,10 @@ pub struct LspServerConfig {
     pub initialization_options: Option<Value>,
 }
 
+/// An async client connected to a running LSP server process.
+///
+/// Manages the JSON-RPC message loop, pending-response tracking, per-file
+/// version counters, and a broadcast channel for diagnostic events.
 pub struct LspClient {
     root: PathBuf,
     stdin: Arc<Mutex<ChildStdin>>,
@@ -157,12 +184,20 @@ pub struct LspClient {
     event_tx: broadcast::Sender<LspEvent>,
 }
 
+/// Events broadcast by an `LspClient` to interested subscribers.
 #[derive(Debug, Clone)]
 pub enum LspEvent {
+    /// The server published a new set of diagnostics for the given file.
     Diagnostics { path: PathBuf, server_id: String },
 }
 
 impl LspClient {
+    /// Spawns the LSP server process described by `config`, performs the `initialize` handshake,
+    /// and returns a ready-to-use client rooted at `root`.
+    ///
+    /// # Errors
+    /// Returns `LspError::ServerStartError` if the process cannot be spawned, or
+    /// `LspError::InitializeError` if the handshake fails.
     pub async fn start(config: LspServerConfig, root: PathBuf) -> Result<Self, LspError> {
         let mut child = Command::new(&config.command)
             .args(&config.args)
@@ -276,6 +311,10 @@ impl LspClient {
         *id
     }
 
+    /// Sends a JSON-RPC request and waits for the server's response.
+    ///
+    /// # Errors
+    /// Returns `LspError::Timeout` if the response channel is dropped before a reply arrives.
     pub async fn request(&self, method: &str, params: Value) -> Result<Value, LspError> {
         let id = self.next_id().await;
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -299,6 +338,7 @@ impl LspClient {
         rx.await.map_err(|_| LspError::Timeout)?
     }
 
+    /// Sends a JSON-RPC notification (fire-and-forget; no response is expected).
     pub async fn notify(&self, method: &str, params: Value) -> Result<(), LspError> {
         let notification = JsonRpcNotification {
             jsonrpc: "2.0".to_string(),
@@ -316,6 +356,10 @@ impl LspClient {
         Ok(())
     }
 
+    /// Notifies the server that a document has been opened or its content has changed.
+    ///
+    /// Sends `textDocument/didOpen` on the first call for a path, and
+    /// `textDocument/didChange` on subsequent calls, incrementing the version counter.
     pub async fn open_document(
         &self,
         path: &Path,
@@ -374,6 +418,7 @@ impl LspClient {
         Ok(())
     }
 
+    /// Returns the most recently received diagnostics for the given file path.
     pub async fn get_diagnostics(&self, path: &Path) -> Vec<Diagnostic> {
         self.diagnostics
             .read()
@@ -388,10 +433,14 @@ impl LspClient {
         self.diagnostics.read().await.clone()
     }
 
+    /// Subscribes to the broadcast channel of `LspEvent`s emitted by this client.
     pub fn subscribe(&self) -> broadcast::Receiver<LspEvent> {
         self.event_tx.subscribe()
     }
 
+    /// Resolves the definition location of the symbol at the given cursor position.
+    ///
+    /// Returns the first location when the server returns multiple results.
     pub async fn goto_definition(
         &self,
         path: &Path,
@@ -430,6 +479,7 @@ impl LspClient {
         }
     }
 
+    /// Requests completion items at the given cursor position.
     pub async fn completion(
         &self,
         path: &Path,
@@ -463,6 +513,8 @@ impl LspClient {
         }))
     }
 
+    /// Returns all reference locations for the symbol at the given cursor position,
+    /// including its declaration.
     pub async fn references(
         &self,
         path: &Path,
@@ -495,6 +547,7 @@ impl LspClient {
         Ok(locations)
     }
 
+    /// Requests hover information for the symbol at the given cursor position.
     pub async fn hover(
         &self,
         path: &Path,
@@ -523,6 +576,9 @@ impl LspClient {
         Ok(Some(hover))
     }
 
+    /// Returns a flat list of all symbols defined in the given document.
+    ///
+    /// Nested `DocumentSymbol` trees are flattened into `SymbolInformation` entries.
     pub async fn document_symbol(
         &self,
         path: &Path,
@@ -553,6 +609,7 @@ impl LspClient {
         })
     }
 
+    /// Searches the entire workspace for symbols matching `query`.
     pub async fn workspace_symbol(
         &self,
         query: &str,
@@ -575,6 +632,7 @@ impl LspClient {
         Ok(symbols)
     }
 
+    /// Returns all implementation locations for the symbol at the given cursor position.
     pub async fn goto_implementation(
         &self,
         path: &Path,
@@ -614,6 +672,7 @@ impl LspClient {
         })
     }
 
+    /// Returns all type-definition locations for the symbol at the given cursor position.
     pub async fn type_definition(
         &self,
         path: &Path,
@@ -649,6 +708,9 @@ impl LspClient {
         })
     }
 
+    /// Requests a workspace-wide rename of the symbol at the given cursor position.
+    ///
+    /// Returns `None` if the server has no edits to apply.
     pub async fn rename(
         &self,
         path: &Path,
@@ -679,6 +741,7 @@ impl LspClient {
         Ok(Some(edit))
     }
 
+    /// Prepares a call hierarchy at the given cursor position, returning the candidate items.
     pub async fn prepare_call_hierarchy(
         &self,
         path: &Path,
@@ -710,6 +773,9 @@ impl LspClient {
         Ok(items)
     }
 
+    /// Returns all callers of the symbol at the given cursor position.
+    ///
+    /// Internally calls `prepare_call_hierarchy` first and uses the first result.
     pub async fn incoming_calls(
         &self,
         path: &Path,
@@ -741,6 +807,9 @@ impl LspClient {
         Ok(calls)
     }
 
+    /// Returns all callees invoked by the symbol at the given cursor position.
+    ///
+    /// Internally calls `prepare_call_hierarchy` first and uses the first result.
     pub async fn outgoing_calls(
         &self,
         path: &Path,
@@ -801,25 +870,32 @@ fn flatten_document_symbol(
     result
 }
 
+/// A named collection of `LspClient` instances, keyed by server identifier.
+///
+/// Allows multiple language servers to be managed together and looked up by id.
 pub struct LspClientRegistry {
     clients: RwLock<HashMap<String, Arc<LspClient>>>,
 }
 
 impl LspClientRegistry {
+    /// Creates an empty registry with no registered clients.
     pub fn new() -> Self {
         Self {
             clients: RwLock::new(HashMap::new()),
         }
     }
 
+    /// Registers a client under the given `id`, replacing any previous entry with the same id.
     pub async fn register(&self, id: String, client: Arc<LspClient>) {
         self.clients.write().await.insert(id, client);
     }
 
+    /// Looks up a client by its server identifier, returning `None` if not found.
     pub async fn get(&self, id: &str) -> Option<Arc<LspClient>> {
         self.clients.read().await.get(id).cloned()
     }
 
+    /// Returns all registered `(id, client)` pairs.
     pub async fn list(&self) -> Vec<(String, Arc<LspClient>)> {
         self.clients
             .read()
@@ -892,6 +968,9 @@ impl Default for LspClientRegistry {
     }
 }
 
+/// Maps a file path to its LSP language identifier string based on the file extension.
+///
+/// Returns `"plaintext"` for unrecognized extensions.
 pub fn detect_language(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()) {
         Some("rs") => "rust",

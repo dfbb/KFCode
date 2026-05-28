@@ -21,23 +21,30 @@ use super::runtime::JsRuntime;
 // Error type
 // ---------------------------------------------------------------------------
 
+/// Errors that can occur when communicating with a plugin subprocess.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginSubprocessError {
+    /// An I/O error from the subprocess pipes.
     #[error("subprocess I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// A JSON serialization or deserialization failure.
     #[error("JSON serialization error: {0}")]
     Json(#[from] serde_json::Error),
 
+    /// The plugin returned a JSON-RPC error object.
     #[error("plugin RPC error ({code}): {message}")]
     Rpc { code: i64, message: String },
 
+    /// The subprocess is no longer running (stdin/stdout closed).
     #[error("plugin subprocess not running")]
     NotRunning,
 
+    /// A response was not received within the configured timeout.
     #[error("plugin response timeout")]
     Timeout,
 
+    /// The framing or message structure violated the protocol.
     #[error("protocol error: {0}")]
     Protocol(String),
 }
@@ -55,6 +62,7 @@ impl From<RpcError> for PluginSubprocessError {
 // Result types (deserialized from host responses)
 // ---------------------------------------------------------------------------
 
+/// Deserialized result of the `initialize` RPC call.
 #[derive(Debug, Deserialize)]
 pub struct InitializeResult {
     pub name: String,
@@ -62,12 +70,14 @@ pub struct InitializeResult {
     pub auth: Option<AuthMeta>,
 }
 
+/// Auth provider metadata returned by the plugin during initialization.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AuthMeta {
     pub provider: String,
     pub methods: Vec<AuthMethodMeta>,
 }
 
+/// Metadata for a single auth method (e.g. OAuth, API key entry).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AuthMethodMeta {
     #[serde(rename = "type")]
@@ -75,6 +85,7 @@ pub struct AuthMethodMeta {
     pub label: String,
 }
 
+/// Deserialized result of the `auth.authorize` RPC call.
 #[derive(Debug, Deserialize)]
 pub struct AuthorizeResult {
     pub url: Option<String>,
@@ -82,6 +93,7 @@ pub struct AuthorizeResult {
     pub method: Option<String>,
 }
 
+/// Deserialized result of the `auth.load` RPC call.
 #[derive(Debug, Deserialize)]
 pub struct AuthLoadResult {
     #[serde(rename = "apiKey")]
@@ -90,6 +102,7 @@ pub struct AuthLoadResult {
     pub has_custom_fetch: bool,
 }
 
+/// Deserialized result of the `auth.fetch` RPC call (non-streaming).
 #[derive(Debug, Deserialize)]
 pub struct AuthFetchResult {
     pub status: u16,
@@ -97,6 +110,9 @@ pub struct AuthFetchResult {
     pub body: String,
 }
 
+/// Streaming result of the `auth.fetch.stream` RPC call.
+///
+/// The `chunks` receiver yields successive body chunks as they arrive from the plugin.
 pub struct AuthFetchStreamResult {
     pub status: u16,
     pub headers: std::collections::HashMap<String, String>,
@@ -107,6 +123,7 @@ pub struct AuthFetchStreamResult {
 // Context passed to plugin on initialize
 // ---------------------------------------------------------------------------
 
+/// Context passed to the plugin subprocess during the `initialize` handshake.
 #[derive(Debug, Clone, Serialize)]
 pub struct PluginContext {
     pub worktree: String,
@@ -119,6 +136,10 @@ pub struct PluginContext {
 // PluginSubprocess
 // ---------------------------------------------------------------------------
 
+/// A live connection to a single TypeScript plugin host process.
+///
+/// All communication uses Content-Length framed JSON-RPC 2.0 over the child's
+/// stdin/stdout. Construct via `PluginSubprocess::spawn`.
 pub struct PluginSubprocess {
     /// Human-readable plugin name (from initialize response).
     name: String,
@@ -197,14 +218,17 @@ impl PluginSubprocess {
 
     // -- Accessors ----------------------------------------------------------
 
+    /// Return the human-readable plugin name reported during initialization.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Return the hook names this plugin registered.
     pub fn hooks(&self) -> &[String] {
         &self.hooks
     }
 
+    /// Return the auth metadata if this plugin provides an auth provider.
     pub fn auth_meta(&self) -> Option<&AuthMeta> {
         self.auth_meta.as_ref()
     }

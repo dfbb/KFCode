@@ -14,17 +14,22 @@ use super::client::{AuthMeta, AuthMethodMeta, PluginSubprocess, PluginSubprocess
 // Error type
 // ---------------------------------------------------------------------------
 
+/// Errors returned by `PluginAuthBridge` operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginAuthError {
+    /// An underlying subprocess RPC call failed.
     #[error("plugin subprocess error: {0}")]
     Subprocess(#[from] PluginSubprocessError),
 
+    /// The plugin does not declare an auth provider.
     #[error("plugin {0} does not provide auth")]
     NoAuth(String),
 
+    /// The caller supplied an out-of-range method index.
     #[error("invalid auth method index {index} for plugin {plugin}")]
     InvalidMethodIndex { plugin: String, index: usize },
 
+    /// The plugin does not expose a custom fetch proxy.
     #[error("no custom fetch available for plugin {0}")]
     NoCustomFetch(String),
 }
@@ -47,6 +52,7 @@ pub struct PluginAuthBridge {
 }
 
 impl PluginAuthBridge {
+    /// Create a new bridge wrapping `client` with the given auth metadata.
     pub fn new(client: Arc<PluginSubprocess>, meta: AuthMeta) -> Self {
         Self {
             client,
@@ -205,6 +211,7 @@ impl PluginAuthBridge {
 // Result types
 // ---------------------------------------------------------------------------
 
+/// The result of a successful `authorize` call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginAuthorizeResult {
     pub url: Option<String>,
@@ -212,6 +219,7 @@ pub struct PluginAuthorizeResult {
     pub method: Option<String>,
 }
 
+/// The result of a successful `load` call.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginAuthLoadResult {
     #[serde(rename = "apiKey")]
