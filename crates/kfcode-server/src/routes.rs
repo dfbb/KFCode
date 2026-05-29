@@ -2963,6 +2963,47 @@ fn canonicalize_within_root(path: &FsPath, root: &FsPath) -> Result<PathBuf> {
     Ok(canonical_path)
 }
 
+/// Returns true if the path matches a known sensitive file pattern that should
+/// never be served, even when it is within the project root.
+fn is_blocked_path(path: &FsPath) -> bool {
+    let path_str = path.to_string_lossy();
+
+    // Block sensitive directory segments
+    let blocked_segments = [".git/", ".ssh/", ".aws/", ".gnupg/"];
+    if blocked_segments.iter().any(|s| path_str.contains(s)) {
+        return true;
+    }
+
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        // .env, .env.local, .env.production, etc.
+        if name == ".env" || name.starts_with(".env.") {
+            return true;
+        }
+        // Certificate / key files
+        if name.ends_with(".pem")
+            || name.ends_with(".key")
+            || name.ends_with(".p12")
+            || name.ends_with(".pfx")
+        {
+            return true;
+        }
+        // SSH private keys
+        if name.starts_with("id_rsa")
+            || name.starts_with("id_ed25519")
+            || name.starts_with("id_ecdsa")
+            || name.starts_with("id_dsa")
+        {
+            return true;
+        }
+        // Token / credential config files
+        if name == ".npmrc" || name == ".pypirc" || name == ".netrc" {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn resolve_input_path(input: &str, root: &FsPath) -> Result<PathBuf> {
     let path = PathBuf::from(input);
     let resolved = if path.is_absolute() {
@@ -3027,6 +3068,12 @@ async fn list_files(Query(query): Query<ListFilesQuery>) -> Result<Json<Vec<File
 async fn read_file(Query(query): Query<ListFilesQuery>) -> Result<Json<serde_json::Value>> {
     let root = project_root()?;
     let path = resolve_input_path(&query.path, &root)?;
+
+    // Deny-list: block sensitive filenames even when within the project root.
+    // Return NotFound (not Forbidden) to avoid leaking file existence.
+    if is_blocked_path(&path) {
+        return Err(ApiError::NotFound("File not found".to_string()));
+    }
 
     if path.is_file() {
         match std::fs::read_to_string(&path) {
@@ -4770,4 +4817,61 @@ async fn get_auth_bridge(provider: &str) -> Result<Arc<PluginAuthBridge>> {
         .auth_bridge(provider)
         .await
         .ok_or_else(|| ApiError::NotFound(format!("no auth plugin for provider: {}", provider)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blocks_env_files() {
+        assert!(is_blocked_path(FsPath::new("/repo/.env")));
+        assert!(is_blocked_path(FsPath::new("/repo/.env.local")));
+        assert!(is_blocked_path(FsPath::new("/repo/sub/.env.production")));
+    }
+
+    #[test]
+    fn blocks_pem_keys() {
+        assert!(is_blocked_path(FsPath::new("/repo/cert.pem")));
+        assert!(is_blocked_path(FsPath::new("/repo/key.pem")));
+        assert!(is_blocked_path(FsPath::new("/repo/server.key")));
+        assert!(is_blocked_path(FsPath::new("/repo/bundle.p12")));
+        assert!(is_blocked_path(FsPath::new("/repo/cert.pfx")));
+    }
+
+    #[test]
+    fn blocks_ssh_keys() {
+        assert!(is_blocked_path(FsPath::new("/home/user/.ssh/id_rsa")));
+        assert!(is_blocked_path(FsPath::new("/home/user/.ssh/id_ed25519")));
+        assert!(is_blocked_path(FsPath::new("/home/user/.ssh/id_ecdsa")));
+        assert!(is_blocked_path(FsPath::new("/home/user/.ssh/id_dsa")));
+    }
+
+    #[test]
+    fn blocks_git_dir() {
+        assert!(is_blocked_path(FsPath::new("/repo/.git/config")));
+        assert!(is_blocked_path(FsPath::new("/repo/.git/HEAD")));
+    }
+
+    #[test]
+    fn blocks_sensitive_dirs() {
+        assert!(is_blocked_path(FsPath::new("/home/user/.aws/credentials")));
+        assert!(is_blocked_path(FsPath::new("/home/user/.gnupg/secring.gpg")));
+    }
+
+    #[test]
+    fn blocks_token_files() {
+        assert!(is_blocked_path(FsPath::new("/repo/.npmrc")));
+        assert!(is_blocked_path(FsPath::new("/home/user/.pypirc")));
+        assert!(is_blocked_path(FsPath::new("/home/user/.netrc")));
+    }
+
+    #[test]
+    fn allows_normal_files() {
+        assert!(!is_blocked_path(FsPath::new("/repo/src/main.rs")));
+        assert!(!is_blocked_path(FsPath::new("/repo/README.md")));
+        assert!(!is_blocked_path(FsPath::new("/repo/Cargo.toml")));
+        assert!(!is_blocked_path(FsPath::new("/repo/src/config.rs")));
+        assert!(!is_blocked_path(FsPath::new("/repo/public/logo.png")));
+    }
 }
