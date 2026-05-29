@@ -15,3 +15,13 @@ futures = { workspace = true }
 tokio-stream = { workspace = true }
 url = "2.5"
 lsp-types = "0.97"
+
+[[bin]]
+name = "lsp-test-stub"
+path = "tests/fixtures/stub.rs"
+test = false
+bench = false
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio-test = "0.4"
