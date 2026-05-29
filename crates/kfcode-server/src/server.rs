@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::sync::{broadcast, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use kfcode_config::load_config;
@@ -482,9 +482,12 @@ fn is_extra_allowed_origin(origin: &str) -> bool {
 }
 
 fn is_allowed_origin(origin: &str) -> bool {
-    origin.starts_with("http://localhost:")
-        || origin.starts_with("http://127.0.0.1:")
-        || origin == "tauri://localhost"
+    // Same-origin UIs (served from the same host:port) never send CORS preflight,
+    // so they don't need to be listed here.
+    //
+    // Tauri desktop shells are explicitly allowed because they use a custom
+    // scheme that the browser treats as cross-origin.
+    origin == "tauri://localhost"
         || origin == "http://tauri.localhost"
         || origin == "https://tauri.localhost"
         || (origin.starts_with("https://") && origin.ends_with(".kfcode.ai"))
@@ -498,8 +501,19 @@ fn cors_layer() -> CorsLayer {
                 origin.to_str().map(is_allowed_origin).unwrap_or(false)
             },
         ))
-        .allow_methods(Any)
-        .allow_headers(Any)
+        .allow_methods(AllowMethods::list([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::PATCH,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ]))
+        .allow_headers(AllowHeaders::list([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            "x-kfcode-directory".parse().expect("valid header name"),
+        ]))
 }
 
 /// Binds to `addr`, builds the Axum app with storage-backed state, and serves requests until shutdown.
