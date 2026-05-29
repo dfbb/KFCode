@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 kfcode-core = { path = "../kfcode-core" }
-kfcode-util = { path = "../kfcode-util" }
+kfcode-util = { path = "../kfcode-util", features = ["upgrade-check"] }
 kfcode-config = { path = "../kfcode-config" }
 kfcode-grep = { path = "../kfcode-grep" }
 kfcode-permission = { path = "../kfcode-permission" }
@@ -43,3 +43,9 @@ dirs = { workspace = true }
 sqlx = { workspace = true }
 url = { workspace = true }
 which = { workspace = true }
+self-replace = "1"
+tar = "0.4"
+zip = "2"
+sha2 = { workspace = true }
+flate2 = "1"
+tempfile = { workspace = true }
