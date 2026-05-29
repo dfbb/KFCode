@@ -101,5 +101,5 @@ echo "==> 推送 commit 与 tag"
 git push
 git push origin "$TAG"
 
-echo "OK: 已推送 $TAG。GitHub Actions 将自动编译三平台并发布 Release / 更新 Homebrew tap。"
+echo "OK: 已推送 ${TAG}。GitHub Actions 将自动编译三平台并发布 Release / 更新 Homebrew tap。"
 echo "    查看进度: https://github.com/dfbb/KFCode/actions"
