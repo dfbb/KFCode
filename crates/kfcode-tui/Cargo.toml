@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[build-dependencies]
+chrono = { workspace = true }
+
 [dependencies]
 # Workspace dependencies
 kfcode-core = { path = "../kfcode-core" }

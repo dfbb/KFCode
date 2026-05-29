@@ -84,6 +84,20 @@ because KFCode pulls in native crates (`sqlx`+sqlite, `portable-pty`, `syntect`'
 - `crates/kfcode-lsp/Cargo.toml`: `[package.metadata.dist] dist = false` — its only
   `[[bin]]` is a test fixture, not a release artifact.
 
+## Version display in the UI
+
+The TUI shows `KFCode <version> <build-date>` (e.g. `KFCode 0.1.1 2026.05.29`). Both
+parts are baked in at compile time:
+
+- **version** — `env!("CARGO_PKG_VERSION")`, i.e. `[workspace.package].version`, which
+  `release.sh` bumps. The next CI build after a release shows the new number.
+- **build date** — injected by `crates/kfcode-tui/build.rs` as `KFCODE_BUILD_DATE`
+  (`YYYY.MM.DD`). It honors `SOURCE_DATE_EPOCH` for reproducible builds, otherwise uses
+  the build time.
+
+The constants live in `crates/kfcode-tui/src/branding.rs` (`APP_VERSION`,
+`APP_BUILD_DATE`, and the combined `APP_VERSION_DATE`).
+
 ## Helper scripts (`scripts/build/`)
 
 | Script | Purpose |
