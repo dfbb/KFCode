@@ -67,7 +67,7 @@ scripts/build/release.sh
 - `ci = ["github"]`。
 - `dist-version` 固定为安装时所用版本,保证可复现。
 
-二进制解压后位于压缩包顶层(dist 默认行为),formula `bin.install "kfcode"` 直接可用。
+二进制随压缩包打包在以平台命名的子目录内(dist 0.32 默认行为,如 `kfcode-cli-aarch64-apple-darwin/kfcode`)。dist 自动生成的 Homebrew formula 与 shell/PowerShell installer 会正确处理该路径,用户无需关心。
 
 ## 6. Homebrew 发布前置条件(需人工准备)
 

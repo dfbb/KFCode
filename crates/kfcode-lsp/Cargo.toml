@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "LSP client for kfcode"
 
+# Not a release artifact; the only [[bin]] here is a test fixture stub.
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 tokio = { workspace = true, features = ["full", "process", "io-util"] }
 serde = { workspace = true, features = ["derive"] }
