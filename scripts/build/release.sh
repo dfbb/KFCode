@@ -34,10 +34,11 @@ current_cargo_version() {
 }
 
 # 最新的 vX.Y.Z tag(去掉 v 前缀);没有则空
+# 注:grep 无匹配时返回非零,在 pipefail 下会使整条管道失败,故用 `|| true` 兜底
 latest_tag_version() {
   git tag --list 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null \
     | sed 's/^v//' \
-    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    | { grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true; } \
     | sort -V | tail -1
 }
 
