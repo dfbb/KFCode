@@ -2,6 +2,8 @@
 
 #![allow(ambiguous_glob_reexports)]
 
+/// Bearer token authentication middleware.
+pub mod auth_middleware;
 /// Error types and the `Result` alias used across all route handlers.
 pub mod error;
 /// MCP server lifecycle and OAuth flow management.

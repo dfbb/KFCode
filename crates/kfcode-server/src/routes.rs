@@ -71,6 +71,7 @@ pub fn router() -> Router<Arc<ServerState>> {
         .nest("/global", global_routes())
         .nest("/experimental", experimental_routes())
         .nest("/plugin", plugin_auth_routes())
+        .layer(middleware::from_fn(crate::auth_middleware::require_auth))
 }
 
 /// Injected by middleware from x-kfcode-directory header for session create.
