@@ -56,6 +56,12 @@ impl Database {
 
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
+            .after_connect(|conn, _meta| Box::pin(async move {
+                sqlx::query("PRAGMA foreign_keys = ON")
+                    .execute(conn)
+                    .await
+                    .map(|_| ())
+            }))
             .connect(&db_url)
             .await
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
@@ -75,6 +81,12 @@ impl Database {
     pub async fn in_memory() -> Result<Self, DatabaseError> {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
+            .after_connect(|conn, _meta| Box::pin(async move {
+                sqlx::query("PRAGMA foreign_keys = ON")
+                    .execute(conn)
+                    .await
+                    .map(|_| ())
+            }))
             .connect("sqlite::memory:")
             .await
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
