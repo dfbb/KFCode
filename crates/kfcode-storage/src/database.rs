@@ -49,8 +49,10 @@ impl Database {
 
     /// Opens (or creates) a database at an explicit filesystem path and runs all pending migrations.
     ///
-    /// Parent directories are created automatically. The pool is configured with up to 5
-    /// connections and `PRAGMA foreign_keys = ON` on every connection.
+    /// Parent directories are created automatically (chmod 0700 on unix). The db file is
+    /// chmod 0600 on unix after the pool connects. The pool is configured with up to 5
+    /// connections and `PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL`, and
+    /// `PRAGMA busy_timeout = 5000` on every connection.
     ///
     /// # Errors
     /// Returns `DatabaseError::ConnectionError` if the path cannot be created or the pool
@@ -59,6 +61,12 @@ impl Database {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let perm = std::fs::Permissions::from_mode(0o700);
+                let _ = std::fs::set_permissions(parent, perm);
+            }
         }
 
         let db_url = format!("sqlite:{}?mode=rwc", path.display());
@@ -68,14 +76,21 @@ impl Database {
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .after_connect(|conn, _meta| Box::pin(async move {
-                sqlx::query("PRAGMA foreign_keys = ON")
-                    .execute(conn)
-                    .await
-                    .map(|_| ())
+                sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await?;
+                sqlx::query("PRAGMA journal_mode = WAL").execute(&mut *conn).await?;
+                sqlx::query("PRAGMA busy_timeout = 5000").execute(&mut *conn).await?;
+                Ok(())
             }))
             .connect(&db_url)
             .await
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perm = std::fs::Permissions::from_mode(0o600);
+            let _ = std::fs::set_permissions(path, perm);
+        }
 
         let db = Self { pool };
         db.run_migrations().await?;
