@@ -4362,6 +4362,9 @@ async fn get_doc() -> Json<DocResponse> {
 
 // --- /log endpoint: accepts a log entry and writes it via tracing ---
 
+const MAX_SERVICE_LEN: usize = 64;
+const MAX_MESSAGE_LEN: usize = 4096;
+
 #[derive(Debug, Deserialize)]
 struct WriteLogRequest {
     service: String,
@@ -4372,6 +4375,25 @@ struct WriteLogRequest {
 }
 
 async fn write_log(Json(req): Json<WriteLogRequest>) -> Result<Json<bool>> {
+    // Validate service: length + character set (alphanumeric, _, -, .)
+    if req.service.len() > MAX_SERVICE_LEN {
+        return Err(ApiError::BadRequest("service field too long".into()));
+    }
+    if !req
+        .service
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+    {
+        return Err(ApiError::BadRequest(
+            "service field contains invalid characters".into(),
+        ));
+    }
+
+    // Validate message: length limit to prevent log flooding
+    if req.message.len() > MAX_MESSAGE_LEN {
+        return Err(ApiError::BadRequest("message field too long".into()));
+    }
+
     let extra_str = req
         .extra
         .as_ref()
