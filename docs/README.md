@@ -5,6 +5,7 @@ This documentation set corresponds to the current code state of **KFCode** (vers
 ## Quick links
 
 - Project overview: `README.md`
+- Installation: `docs/INSTALL.md`
 - User guide: `USER_GUIDE.md`
 - Build & release: `docs/BUILD.md`
 - CLI: `docs/kfcode-cli.md`
