@@ -1,8 +1,8 @@
 # KFCode
 
-**KFCode, originally based on KFCode by SST**
+**KFCode — ported from [OpenCodeRust](https://github.com/ChrisFeldmeier/OpenCodeRust)**
 
-KFCode is the Rust implementation and evolution of KFCode. It provides a full CLI/TUI/Server workflow for local AI coding agents, session management, tool invocation, MCP/LSP integration, and plugin extensions.
+KFCode is a port of [OpenCodeRust](https://github.com/ChrisFeldmeier/OpenCodeRust) by Chris Feldmeier, itself a Rust implementation of [opencode](https://github.com/sst/opencode) by SST. It provides a full CLI/TUI/Server workflow for local AI coding agents, session management, tool invocation, MCP/LSP integration, and plugin extensions.
 
 ## Current status
 
@@ -167,4 +167,10 @@ cargo check -p kfcode-tui
 
 ## Notes
 
-- The executable is named `kfcode`. KFCode is the project name, originally a Rust port of KFCode by SST.
+- The executable is named `kfcode`. KFCode is the project name, ported from [OpenCodeRust](https://github.com/ChrisFeldmeier/OpenCodeRust).
+
+## Acknowledgments
+
+KFCode is a port of [OpenCodeRust](https://github.com/ChrisFeldmeier/OpenCodeRust), created and maintained by [Chris Feldmeier](https://github.com/ChrisFeldmeier). OpenCodeRust is itself a Rust implementation of [opencode](https://github.com/sst/opencode) by SST. We are grateful to the original authors for their work, without which KFCode would not exist.
+
+KFCode is distributed under the MIT License. Copyright notices for OpenCodeRust and opencode are retained in [LICENSE](./LICENSE).
