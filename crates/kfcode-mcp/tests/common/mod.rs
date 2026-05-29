@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod sse_server;
+
 use std::sync::Arc;
 use kfcode_mcp::McpToolRegistry;
 use wiremock::{matchers::{method, path}, Mock, MockServer, ResponseTemplate};
