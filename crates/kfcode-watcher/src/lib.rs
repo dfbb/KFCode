@@ -192,8 +192,21 @@ impl FileWatcher {
     ///
     /// If no paths remain after removal the underlying watcher is dropped entirely.
     pub fn unwatch(&self, path: &Path) -> Result<(), WatcherError> {
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
+        // First, tell the underlying notify watcher to stop watching this path.
+        {
+            let mut guard = self.watcher.write();
+            if let Some(w) = guard.as_mut() {
+                // Ignore errors: the path may already have been removed from the watcher.
+                let _ = w.unwatch(&canonical);
+            }
+        }
+
+        // Remove from our own tracking set (stored as the original path).
         self.watched_paths.remove(path);
 
+        // Drop the watcher entirely when no paths remain.
         if self.watched_paths.is_empty() {
             *self.watcher.write() = None;
             info!("Stopped all watchers");
