@@ -15,6 +15,15 @@ pub fn fresh_registry() -> Arc<McpToolRegistry> {
     Arc::new(McpToolRegistry::new())
 }
 
+use kfcode_mcp::auth::AuthStore;
+use tempfile::TempDir;
+
+pub fn fresh_auth_store() -> (AuthStore, TempDir) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("mcp-auth.json");
+    (AuthStore::new(path), dir)
+}
+
 /// 给 wiremock server mount 一个按 JSON-RPC method 字段匹配的 POST 响应。
 pub async fn mount_jsonrpc_method(
     server: &MockServer,
