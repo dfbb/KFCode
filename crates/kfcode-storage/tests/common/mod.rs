@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
+use chrono::Utc;
 use kfcode_storage::{Database, DatabaseError};
+use kfcode_types::session::{Session, SessionStatus, SessionTime};
+use std::collections::HashMap;
 use tempfile::TempDir;
 
 pub async fn fresh_db() -> Database {
@@ -16,3 +19,27 @@ pub async fn fresh_tempdir_db() -> (Database, TempDir) {
 }
 
 pub use kfcode_storage::DatabaseError as DbErr;
+
+pub fn make_session(id: &str, project_id: &str) -> Session {
+    let now = Utc::now();
+    Session {
+        id: id.to_string(),
+        slug: id.to_string(),
+        project_id: project_id.to_string(),
+        directory: "/tmp/test".to_string(),
+        parent_id: None,
+        title: format!("Test {id}"),
+        version: "1.0.0".to_string(),
+        time: SessionTime::default(),
+        messages: Vec::new(),
+        summary: None,
+        share: None,
+        revert: None,
+        permission: None,
+        usage: None,
+        status: SessionStatus::default(),
+        metadata: HashMap::new(),
+        created_at: now,
+        updated_at: now,
+    }
+}
