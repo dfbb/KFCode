@@ -28,3 +28,8 @@ rand = { workspace = true }
 chrono = { workspace = true }
 axum = { workspace = true }
 hex = { workspace = true }
+
+[dev-dependencies]
+wiremock = { workspace = true }
+tempfile = { workspace = true }
+tokio-test = "0.4"
