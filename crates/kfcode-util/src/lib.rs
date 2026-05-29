@@ -6,6 +6,8 @@ pub mod filesystem;
 pub mod logging;
 /// Collection of small, focused utility sub-modules.
 pub mod util;
+/// Upgrade-check helpers: version parsing and comparison.
+pub mod upgrade_check;
 
 pub use filesystem::Filesystem;
 pub use logging::{init_tracing, Log, LogLevel};
