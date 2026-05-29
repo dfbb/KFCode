@@ -40,29 +40,45 @@ kfcode upgrade
 - 无参数、无 `--check`、无 `--yes`、无 `target`、无 `--method`。
 - 行为:检查 GitHub Release 最新版,已是最新则提示退出(方案 A),否则下载替换到最新。
 
-## 5. 新模块:`crates/kfcode-cli/src/upgrade.rs`
+## 5. 代码落点(拆分:检查进 util,执行留 cli)
 
-升级逻辑自成一体,从 ~3000 行的 main.rs 抽出为独立模块。职责:
+约束:依赖方向是 `kfcode-cli → kfcode-tui`、两者都 `→ kfcode-util`。TUI **不能**反向依赖
+CLI。启动检查(TUI 用)与升级执行(CLI 用)因此拆分到不同落点:
 
-1. 查询最新 Release 版本(GitHub API)
-2. 运行时探测平台 → target triple → asset 名
-3. 下载 archive + sha256,校验
-4. 解压取出 `kfcode` 二进制
-5. self-replace 原子替换当前二进制
+**A. 轻量检查 → `crates/kfcode-util/src/upgrade_check.rs`**(cli + tui 共享)
+- 查询最新正式版 Release(GitHub API)
+- 三段版本比较 `parse_version` / `is_newer`
+- 缓存读写(`upgrade-check.json`)
+- 依赖:仅 `reqwest` + 已有的 serde/serde_json/chrono。`reqwest` 放在
+  util 的可选 feature `upgrade-check` 后(默认关闭),cli/tui 显式开启,避免其他
+  依赖 util 的 crate(如 kfcode-tool)被迫编译 TLS。
+
+**B. 升级执行 → `crates/kfcode-cli/src/upgrade.rs`**(仅 CLI)
+- 平台 → target triple → asset 名推导
+- 下载 archive + sha256,校验
+- 解压取出 `kfcode` 二进制
+- self-replace 原子替换
+- 重依赖(self-replace/tar/zip/flate2/sha2)只在 cli,不污染 util 及其下游。
+
+TUI 启动检查只调用 A;`kfcode upgrade` 命令先调 A 拿版本判断,再调 B 执行。
 
 ## 6. `kfcode upgrade` 数据流
 
 ```
-1. 查最新版本
+1. 查最新版本(util A)
    GET https://api.github.com/repos/dfbb/KFCode/releases/latest
    Header: User-Agent: kfcode-cli, Accept: application/vnd.github+json
+   /releases/latest 不返回 prerelease，天然只得正式版
    tag_name 去 v 前缀 → "0.1.2"
 
-2. 比较版本(方案 A)
-   current = env!("CARGO_PKG_VERSION")(编译时固化)
-   current == latest → 打印"已是最新版"，退出 0;否则继续
 
-3. 定位本平台 asset
+2. 比较版本(方案 A,按版本序而非字符串相等)
+   current = env!("CARGO_PKG_VERSION")(编译时固化)
+   仅当 is_newer(latest, current) 为真(latest > current)才升级。
+   current >= latest(含本地/开发版超前的情况)→ 打印"已是最新版 <current>"，退出 0。
+   不会发生降级:current > latest 时不动作。
+
+3. 定位本平台 asset(cli B)
    运行时探测 OS/arch → target triple → asset 文件名:
      macOS arm64   → aarch64-apple-darwin    → kfcode-cli-aarch64-apple-darwin.tar.gz
      Linux amd64   → x86_64-unknown-linux-gnu → kfcode-cli-x86_64-unknown-linux-gnu.tar.gz
@@ -86,12 +102,16 @@ kfcode upgrade
 - 网络失败 / API 限流:提示并退出
 - 无写权限(二进制在系统目录、非 root):捕获权限错误,提示用对应方式升级(如 `brew upgrade` 或加权限)
 
-## 7. 依赖(方案 X)
+## 7. 依赖(方案 X,按落点拆分)
 
-下载用现有 `reqwest`;新增/显式声明:
+**`kfcode-util`(检查 A)** — 新增 `reqwest`,放在可选 feature `upgrade-check` 后
+(默认关闭,cli/tui 显式开启)。serde/serde_json/chrono util 已有。
+
+**`kfcode-cli`(执行 B)** — 下载/解压/替换的重依赖只在此:
 
 | crate | 用途 | 现状 |
 |-------|------|------|
+| `reqwest` | 下载 archive | cli 已有 |
 | `self-replace` | 原子替换当前二进制(含 Windows 自删除) | 新增 |
 | `flate2` | 解 gzip | lock 中已间接存在,需显式声明 |
 | `tar` | 解 tar | 新增 |
@@ -99,10 +119,12 @@ kfcode upgrade
 | `sha2` | sha256 校验 | workspace 已有 |
 
 不使用 `self_update` 一站式库:它对 archive 内部结构有自身假设,定制 sha256 校验不灵活。
+重依赖不进 util,避免 kfcode-tool 等 util 下游被迫编译 self-replace/解压库。
 
 ## 8. 启动时检查 + 空闲提示(仅 TUI)
 
-**异步非阻塞**:启动时 spawn 独立任务查版本,主流程/TUI 立即正常启动,绝不因检查阻塞。
+**异步非阻塞**:启动时 spawn 独立任务,调用 util A(`upgrade_check`)查版本,主流程/TUI
+立即正常启动,绝不因检查阻塞。
 
 **限频缓存**:`<cache_dir>/kfcode/upgrade-check.json`
 ```json
@@ -123,18 +145,30 @@ kfcode upgrade
 
 ## 9. 版本比较
 
-自写三段 `u32` 比较,不引入 semver crate(版本号由 release.sh 保证为规整 X.Y.Z):
+只比较正式版的三段 `u32`,不引入 semver crate。
+
+**prerelease 处理**:升级检查只跟正式版。`release.sh` 允许 `X.Y.Z-suffix`,且 release
+workflow 会把带 suffix 的版本标记为 GitHub prerelease;而 `/releases/latest` API **不返回
+prerelease**,因此查询天然只得到正式版,版本号必为规整 `X.Y.Z`。
+
 ```
-parse_version("0.1.2") -> (0, 1, 2)，逐段比较
+parse_version("0.1.2") -> (0, 1, 2)
+is_newer(a, b): 逐段比较 a 是否 > b
 ```
+
+解析时若遇到带 `-suffix` 的字符串(理论上不应从 latest 得到),截断 `-` 之前的部分按三段解析;
+无法解析为三段则视为"无新版",静默跳过(不影响启动 / 不误升级)。
 
 ## 10. 成功标准
 
 1. 旧的 InstallMethod / detect_install_method / 多源 latest_version / run_upgrade_process 全部删除。
-2. 新 `upgrade.rs` 模块:查 Release → 校验 sha256 → 解压 → self-replace,全链路可编译。
-3. `kfcode upgrade` 无参数,已是最新则提示退出,否则升级到最新。
+2. 检查逻辑落在 `kfcode-util`(feature `upgrade-check`),执行逻辑落在 `kfcode-cli/src/upgrade.rs`;
+   TUI 只依赖 util 的检查 API,不反向依赖 cli;全链路可编译。
+3. `kfcode upgrade` 无参数:按版本序比较,仅 latest > current 才升级,current >= latest 提示退出
+   (不降级);需要升级时下载 → 校验 sha256 → 解压 → self-replace 到最新正式版。
 4. 本平台无 asset / 网络失败 / 无写权限,均有清晰中文报错。
-5. TUI 启动异步检查,空闲(输入框空)才提示,不阻塞启动;CLI 不提示。
-6. 24h 限频缓存生效,检查失败静默。
-7. 三段版本比较正确;workspace 全量编译通过;新增单元测试覆盖版本比较与 asset 名推导。
+5. TUI 启动异步检查(调 util A),空闲(输入框空)才提示,不阻塞启动;CLI 不提示。
+6. 24h 限频缓存生效,检查失败静默;prerelease 不参与(只跟 /releases/latest 正式版)。
+7. 三段版本比较正确(含 current > latest 不升级的用例);workspace 全量编译通过;
+   新增单元测试覆盖版本比较与 asset 名推导。
 
