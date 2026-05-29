@@ -127,58 +127,62 @@ impl FileWatcher {
             return Err(WatcherError::AlreadyWatching(path.to_path_buf()));
         }
 
-        let event_tx = self.event_tx.clone();
-        let ignore_patterns = self.ignore_patterns.clone();
+        let mut guard = self.watcher.write();
 
-        let mut watcher =
-            notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
-                Ok(event) => {
-                    let file_event = match event.kind {
-                        EventKind::Create(_) => FileEvent::Add,
-                        EventKind::Modify(_) => FileEvent::Change,
-                        EventKind::Remove(_) => FileEvent::Unlink,
-                        _ => return,
-                    };
+        if guard.is_none() {
+            // First watch: create the underlying notify watcher.
+            let event_tx = self.event_tx.clone();
+            let ignore_patterns = self.ignore_patterns.clone();
 
-                    for path in &event.paths {
-                        let path_str = path.to_string_lossy();
-                        let should_ignore = ignore_patterns.iter().any(|p| p.matches(&path_str));
-
-                        if should_ignore {
-                            debug!(path = ?path, "Ignoring file event");
-                            continue;
-                        }
-
-                        let watcher_event = WatcherEvent {
-                            file: path.clone(),
-                            event: file_event,
+            let mut new_watcher =
+                notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
+                    Ok(event) => {
+                        let file_event = match event.kind {
+                            EventKind::Create(_) => FileEvent::Add,
+                            EventKind::Modify(_) => FileEvent::Change,
+                            EventKind::Remove(_) => FileEvent::Unlink,
+                            _ => return,
                         };
 
-                        if let Err(e) = event_tx.send(watcher_event) {
-                            warn!(error = %e, "Failed to send watcher event");
+                        for path in &event.paths {
+                            let path_str = path.to_string_lossy();
+                            let should_ignore =
+                                ignore_patterns.iter().any(|p| p.matches(&path_str));
+
+                            if should_ignore {
+                                debug!(path = ?path, "Ignoring file event");
+                                continue;
+                            }
+
+                            let watcher_event = WatcherEvent {
+                                file: path.clone(),
+                                event: file_event,
+                            };
+
+                            if let Err(e) = event_tx.send(watcher_event) {
+                                warn!(error = %e, "Failed to send watcher event");
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    error!(error = %e, "Watcher error");
-                }
-            })?;
+                    Err(e) => {
+                        error!(error = %e, "Watcher error");
+                    }
+                })?;
 
-        watcher.configure(
-            Config::default().with_poll_interval(Duration::from_millis(self.debounce_ms)),
-        )?;
+            new_watcher.configure(
+                Config::default().with_poll_interval(Duration::from_millis(self.debounce_ms)),
+            )?;
 
-        let mode = if self.watched_paths.is_empty() {
-            RecursiveMode::Recursive
-        } else {
-            RecursiveMode::NonRecursive
-        };
+            *guard = Some(new_watcher);
+        }
 
-        watcher.watch(path, mode)?;
+        // Reuse the existing watcher for subsequent paths.
+        let w = guard.as_mut().expect("watcher just initialised");
+        w.watch(path, RecursiveMode::Recursive)
+            .map_err(|e| WatcherError::WatchError(e.to_string()))?;
 
         info!(path = ?path, "Started watching directory");
 
-        *self.watcher.write() = Some(watcher);
         self.watched_paths.insert(path.to_path_buf());
 
         Ok(())
