@@ -1268,6 +1268,65 @@ impl Config {
     }
 }
 
+/// A restricted patch payload accepted by `PATCH /config`.
+///
+/// Only safe, UI-facing fields are exposed.  Sensitive fields such as
+/// `provider`, `mcp`, `agent`, `permission`, `experimental`, and `instructions`
+/// are intentionally absent.  `#[serde(deny_unknown_fields)]` ensures that
+/// attempts to smuggle in unlisted fields (e.g. `provider.x.api_key`) are
+/// rejected with a 400 rather than silently ignored.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigPatch {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    #[serde(rename = "smallModel", alias = "small_model", skip_serializing_if = "Option::is_none")]
+    pub small_model: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autoshare: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autoupdate: Option<AutoUpdateMode>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share: Option<ShareMode>,
+}
+
+impl ConfigPatch {
+    /// Apply the non-`None` fields of this patch onto `config`.
+    pub fn apply_to(&self, config: &mut Config) {
+        if let Some(ref v) = self.theme {
+            config.theme = Some(v.clone());
+        }
+        if let Some(ref v) = self.model {
+            config.model = Some(v.clone());
+        }
+        if let Some(ref v) = self.small_model {
+            config.small_model = Some(v.clone());
+        }
+        if let Some(ref v) = self.username {
+            config.username = Some(v.clone());
+        }
+        if let Some(v) = self.autoshare {
+            config.autoshare = Some(v);
+        }
+        if let Some(ref v) = self.autoupdate {
+            config.autoupdate = Some(v.clone());
+        }
+        if let Some(ref v) = self.share {
+            config.share = Some(v.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

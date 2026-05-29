@@ -34,7 +34,7 @@ use crate::pty::{PtyManager, PtySession as PtySessionStruct, PtySubscription};
 use crate::worktree::{self, WorktreeInfo as WorktreeInfoStruct};
 use crate::{ApiError, Result, ServerState};
 use kfcode_agent::{AgentMode, AgentRegistry};
-use kfcode_config::{load_config, Config as AppConfig, McpServerConfig as LoadedMcpServerConfig};
+use kfcode_config::{load_config, Config as AppConfig, ConfigPatch, McpServerConfig as LoadedMcpServerConfig};
 use kfcode_plugin::subprocess::{PluginAuthBridge, PluginLoader, PluginSubprocessError};
 use kfcode_provider::{
     temperature_for_model, top_p_for_model, AuthInfo, AuthMethodType, ModelsData, ModelsDevInfo,
@@ -2468,10 +2468,10 @@ async fn get_config(State(_state): State<Arc<ServerState>>) -> Result<Json<AppCo
 
 async fn patch_config(
     State(state): State<Arc<ServerState>>,
-    Json(patch): Json<AppConfig>,
+    Json(patch): Json<ConfigPatch>,
 ) -> Result<Json<AppConfig>> {
     let mut config = CONFIG_STATE.write().await;
-    config.merge(patch);
+    patch.apply_to(&mut config);
     let updated = config.clone();
     state.broadcast(
         &serde_json::json!({
