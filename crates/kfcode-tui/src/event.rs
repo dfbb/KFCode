@@ -40,6 +40,8 @@ pub enum CustomEvent {
     ToolCallComplete { id: String, result: String },
     /// A state-change notification from the server event stream.
     StateChanged(StateChange),
+    /// A newer release is available; payload is the latest version string.
+    UpgradeAvailable(String),
 }
 
 /// Discrete state transitions broadcast from the server event stream.

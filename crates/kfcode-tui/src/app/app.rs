@@ -104,6 +104,7 @@ impl App {
         let api_client = Arc::new(ApiClient::new(base_url.clone()));
         context.set_api_client(api_client);
         spawn_server_event_listener(event_tx.clone(), base_url);
+        spawn_upgrade_check(event_tx.clone());
 
         if let Ok(agent) = std::env::var("KFCODE_TUI_AGENT") {
             let agent = agent.trim();
@@ -713,6 +714,19 @@ impl App {
                         },
                     );
                     self.sync_prompt_spinner_state();
+                }
+                CustomEvent::UpgradeAvailable(version) => {
+                    // 仅在用户空闲(输入框为空)时提示,否则丢弃,留待下次启动再提示。
+                    if self.prompt.get_input().is_empty() {
+                        let current = env!("CARGO_PKG_VERSION");
+                        self.toast.show(
+                            ToastVariant::Info,
+                            &format!(
+                                "有新版本 {version} 可用(当前 {current}),运行 kfcode upgrade 升级"
+                            ),
+                            6000,
+                        );
+                    }
                 }
                 _ => {}
             },
@@ -3604,6 +3618,29 @@ fn resolve_tui_base_url() -> String {
     }
 
     "http://localhost:3000".to_string()
+}
+
+/// Spawns a detached thread that checks for a newer release and, if found,
+/// sends `CustomEvent::UpgradeAvailable`. Never blocks startup; any failure is
+/// silently ignored (a failed update check must not disrupt the TUI).
+fn spawn_upgrade_check(event_tx: Sender<Event>) {
+    thread::spawn(move || {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt,
+            Err(_) => return,
+        };
+        let latest = match runtime.block_on(kfcode_util::upgrade_check::latest_version_cached()) {
+            Ok(v) => v,
+            Err(_) => return, // 静默忽略
+        };
+        let current = env!("CARGO_PKG_VERSION");
+        if kfcode_util::upgrade_check::is_newer(&latest, current) {
+            let _ = event_tx.send(Event::Custom(CustomEvent::UpgradeAvailable(latest)));
+        }
+    });
 }
 
 fn spawn_server_event_listener(event_tx: Sender<Event>, base_url: String) {
