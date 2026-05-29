@@ -1695,7 +1695,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-agent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1716,7 +1716,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1769,7 +1769,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "dirs",
@@ -1788,7 +1788,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "hex",
@@ -1803,7 +1803,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-grep"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "kfcode-core",
@@ -1834,7 +1834,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1865,7 +1865,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-permission"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "dirs",
@@ -1898,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-provider"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1964,7 +1964,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-session"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1997,7 +1997,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2017,7 +2017,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-tool"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-process",
@@ -2058,7 +2058,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-tui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2097,7 +2097,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-types"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "kfcode-util"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
