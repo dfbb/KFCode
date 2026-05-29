@@ -1,3 +1,4 @@
+//! Collapsible thinking block component that displays model reasoning.
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,14 +9,20 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// A collapsible block that shows model reasoning with an optional elapsed-time label.
 pub struct ThinkingBlock {
+    /// Cleaned reasoning text (REDACTED markers stripped).
     pub content: String,
+    /// How long the model spent thinking, in milliseconds.
     pub duration_ms: Option<u64>,
+    /// Whether the block is currently collapsed.
     pub collapsed: bool,
+    /// Whether the block should be rendered at all.
     pub visible: bool,
 }
 
 impl ThinkingBlock {
+    /// Create a new thinking block, stripping any `[REDACTED]` markers from the content.
     pub fn new(content: String) -> Self {
         // Strip [REDACTED] markers from content
         let cleaned = content.replace("[REDACTED]", "").trim().to_string();
@@ -27,27 +34,33 @@ impl ThinkingBlock {
         }
     }
 
+    /// Attach an elapsed thinking duration in milliseconds.
     pub fn with_duration(mut self, ms: u64) -> Self {
         self.duration_ms = Some(ms);
         self
     }
 
+    /// Toggle between collapsed and expanded states.
     pub fn toggle(&mut self) {
         self.collapsed = !self.collapsed;
     }
 
+    /// Expand the block so its content is visible.
     pub fn expand(&mut self) {
         self.collapsed = false;
     }
 
+    /// Collapse the block to show only the header line.
     pub fn collapse(&mut self) {
         self.collapsed = true;
     }
 
+    /// Show or hide the block without changing its collapsed state.
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
     }
 
+    /// Render the thinking block into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             return;

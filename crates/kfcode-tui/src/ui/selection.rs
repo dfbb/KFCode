@@ -1,3 +1,4 @@
+//! Mouse-driven text selection with Unicode-aware column slicing.
 use unicode_width::UnicodeWidthChar;
 
 /// Terminal text selection — tracks a rectangular region in screen coordinates

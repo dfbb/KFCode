@@ -1,16 +1,22 @@
+//! Cross-platform clipboard read/write with OSC 52 fallback for SSH sessions.
 use anyhow::Context;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+/// The data and MIME type read from the system clipboard.
 pub struct ClipboardContent {
+    /// Raw clipboard data (base64-encoded for images, plain text otherwise).
     pub data: String,
+    /// MIME type of the clipboard content (e.g. "text/plain" or "image/png").
     pub mime: String,
 }
 
+/// Namespace for clipboard read and write operations.
 pub struct Clipboard;
 
 impl Clipboard {
+    /// Read the clipboard, returning image data (PNG/base64) if available, otherwise plain text.
     pub fn read() -> anyhow::Result<ClipboardContent> {
         if let Ok(image_data) = read_image_from_clipboard() {
             return Ok(ClipboardContent {
@@ -26,6 +32,7 @@ impl Clipboard {
         })
     }
 
+    /// Read plain text from the system clipboard using the platform-native tool.
     pub fn read_text() -> anyhow::Result<String> {
         if cfg!(target_os = "macos") {
             return read_with_command("pbpaste", &[]);
@@ -51,6 +58,7 @@ impl Clipboard {
         read_with_command("xsel", &["--clipboard", "--output"])
     }
 
+    /// Write plain text to the system clipboard, using OSC 52 as a first attempt.
     pub fn write_text(text: &str) -> anyhow::Result<()> {
         // Always attempt OSC 52 first — works over SSH when the terminal
         // emulator supports it, even without native clipboard tools.

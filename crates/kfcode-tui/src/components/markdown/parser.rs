@@ -1,51 +1,73 @@
+//! Lightweight markdown parser that produces a flat list of block-level elements.
 #![allow(dead_code)]
 
+/// A top-level block element parsed from a markdown document.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MarkdownBlock {
+    /// An ATX heading with a nesting level (1–6) and text content.
     Heading {
         level: u8,
         content: String,
     },
+    /// A paragraph with raw text and its parsed inline elements.
     Paragraph {
         content: String,
         inline: Vec<InlineElement>,
     },
+    /// A fenced or indented code block with an optional language hint.
     CodeBlock {
         language: Option<String>,
         code: String,
     },
+    /// An ordered or unordered list.
     List {
         items: Vec<ListItem>,
         ordered: bool,
     },
+    /// A block-quote with its inner text.
     BlockQuote {
         content: String,
     },
+    /// A horizontal rule.
     ThematicBreak,
+    /// A table with header cells and data rows.
     Table {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
     },
 }
 
+/// An inline span element within a paragraph or list item.
 #[derive(Clone, Debug, PartialEq)]
 pub enum InlineElement {
+    /// Plain unstyled text.
     Plain(String),
+    /// Bold text.
     Bold(String),
+    /// Italic text.
     Italic(String),
+    /// Bold and italic text.
     BoldItalic(String),
+    /// Inline code span.
     Code(String),
+    /// A hyperlink with display text and URL.
     Link { text: String, url: String },
+    /// Strikethrough text.
     Strikethrough(String),
 }
 
+/// A single item in an ordered or unordered list.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ListItem {
+    /// Raw text content of the item.
     pub content: String,
+    /// Parsed inline elements for the item text.
     pub inline: Vec<InlineElement>,
+    /// Nested child items.
     pub children: Vec<ListItem>,
 }
 
+/// Parse a markdown string into a sequence of block-level elements.
 pub fn parse_markdown(text: &str) -> Vec<MarkdownBlock> {
     let mut blocks = Vec::new();
     let mut lines = text.lines().peekable();
@@ -233,6 +255,7 @@ fn collect_ordered_list(lines: &mut std::iter::Peekable<std::str::Lines>) -> Vec
     items
 }
 
+/// Parse inline spans from a single line of text.
 pub fn parse_inline(text: &str) -> Vec<InlineElement> {
     let mut elements = Vec::new();
     let mut current = String::new();

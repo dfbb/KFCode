@@ -1,3 +1,4 @@
+//! Single todo item component with status icon rendering.
 use ratatui::{
     layout::Rect,
     style::Style,
@@ -8,12 +9,16 @@ use ratatui::{
 
 use crate::context::TodoStatus;
 
+/// A single todo entry with its text and current status.
 pub struct TodoItem {
+    /// Display text of the todo entry.
     pub content: String,
+    /// Current lifecycle status.
     pub status: TodoStatus,
 }
 
 impl TodoItem {
+    /// Create a new todo item with the given text and status.
     pub fn new(content: &str, status: TodoStatus) -> Self {
         Self {
             content: content.to_string(),
@@ -21,6 +26,7 @@ impl TodoItem {
         }
     }
 
+    /// Render the todo item with a status icon into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         let (icon, color) = match &self.status {
             TodoStatus::Pending => ("○", ratatui::style::Color::Gray),

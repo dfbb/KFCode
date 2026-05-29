@@ -1,3 +1,4 @@
+//! Specialized view components for individual tool types.
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -11,12 +12,16 @@ use super::tool_call::ToolCallStatus;
 use crate::context::TodoStatus;
 use crate::theme::Theme;
 
+/// View for a glob file-search tool call.
 pub struct GlobToolView {
+    /// The glob pattern that was searched.
     pub pattern: String,
+    /// Matched file paths, once the tool has returned.
     pub matches: Option<Vec<String>>,
 }
 
 impl GlobToolView {
+    /// Create a new glob view for the given pattern.
     pub fn new(pattern: String) -> Self {
         Self {
             pattern,
@@ -24,6 +29,7 @@ impl GlobToolView {
         }
     }
 
+    /// Render the glob view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let count = self.matches.as_ref().map(|m| m.len()).unwrap_or(0);
 
@@ -41,13 +47,18 @@ impl GlobToolView {
     }
 }
 
+/// View for a grep text-search tool call.
 pub struct GrepToolView {
+    /// The regex or literal pattern that was searched.
     pub pattern: String,
+    /// Optional path scope for the search.
     pub path: Option<String>,
+    /// Number of matches found, once the tool has returned.
     pub matches: Option<u32>,
 }
 
 impl GrepToolView {
+    /// Create a new grep view for the given pattern.
     pub fn new(pattern: String) -> Self {
         Self {
             pattern,
@@ -56,6 +67,7 @@ impl GrepToolView {
         }
     }
 
+    /// Render the grep view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let count = self.matches.unwrap_or(0);
 
@@ -78,15 +90,19 @@ impl GrepToolView {
     }
 }
 
+/// View for a directory listing tool call.
 pub struct ListToolView {
+    /// The directory path that was listed.
     pub path: String,
 }
 
 impl ListToolView {
+    /// Create a new list view for the given path.
     pub fn new(path: String) -> Self {
         Self { path }
     }
 
+    /// Render the list view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let line = Line::from(vec![
             Span::styled("list ", Style::default().fg(theme.primary)),
@@ -98,15 +114,19 @@ impl ListToolView {
     }
 }
 
+/// View for a web-fetch tool call.
 pub struct WebfetchToolView {
+    /// The URL that was fetched.
     pub url: String,
 }
 
 impl WebfetchToolView {
+    /// Create a new webfetch view for the given URL.
     pub fn new(url: String) -> Self {
         Self { url }
     }
 
+    /// Render the webfetch view into the given frame area, truncating long URLs.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let display_url = if self.url.chars().count() > 50 {
             format!("{}...", self.url.chars().take(47).collect::<String>())
@@ -124,12 +144,16 @@ impl WebfetchToolView {
     }
 }
 
+/// View for a web-search tool call.
 pub struct WebsearchToolView {
+    /// The search query string.
     pub query: String,
+    /// Number of results returned, once the tool has finished.
     pub results: Option<u32>,
 }
 
 impl WebsearchToolView {
+    /// Create a new websearch view for the given query.
     pub fn new(query: String) -> Self {
         Self {
             query,
@@ -137,6 +161,7 @@ impl WebsearchToolView {
         }
     }
 
+    /// Render the websearch view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let count = self.results.unwrap_or(0);
 
@@ -154,13 +179,18 @@ impl WebsearchToolView {
     }
 }
 
+/// View for a long-running task tool call.
 pub struct TaskToolView {
+    /// Human-readable name of the task.
     pub task_name: String,
+    /// Optional category label for the task.
     pub category: Option<String>,
+    /// Current execution status.
     pub status: ToolCallStatus,
 }
 
 impl TaskToolView {
+    /// Create a new task view with the given name, defaulting to running status.
     pub fn new(task_name: String) -> Self {
         Self {
             task_name,
@@ -169,6 +199,7 @@ impl TaskToolView {
         }
     }
 
+    /// Render the task view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let status_icon = match self.status {
             ToolCallStatus::Pending => "◯",
@@ -209,15 +240,19 @@ impl TaskToolView {
     }
 }
 
+/// View for a skill invocation tool call.
 pub struct SkillToolView {
+    /// Name of the skill that was invoked.
     pub skill_name: String,
 }
 
 impl SkillToolView {
+    /// Create a new skill view for the given skill name.
     pub fn new(skill_name: String) -> Self {
         Self { skill_name }
     }
 
+    /// Render the skill view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let line = Line::from(vec![
             Span::styled("skill ", Style::default().fg(theme.primary)),
@@ -229,13 +264,18 @@ impl SkillToolView {
     }
 }
 
+/// View for a file edit tool call, showing the diff and any diagnostics.
 pub struct EditToolView {
+    /// Path of the file being edited.
     pub file_path: String,
+    /// Unified diff content for the edit.
     pub diff_content: String,
+    /// Diagnostic messages produced after the edit.
     pub diagnostics: Vec<String>,
 }
 
 impl EditToolView {
+    /// Create a new edit view for the given file path and diff.
     pub fn new(file_path: String, diff_content: String) -> Self {
         Self {
             file_path,
@@ -244,6 +284,7 @@ impl EditToolView {
         }
     }
 
+    /// Render the edit view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let mut lines = vec![Line::from(vec![
             Span::styled(
@@ -288,12 +329,16 @@ impl EditToolView {
     }
 }
 
+/// View for an apply-patch tool call that may touch multiple files.
 pub struct ApplyPatchToolView {
+    /// File paths extracted from the diff headers.
     pub files: Vec<String>,
+    /// Full unified diff content.
     pub diff_content: String,
 }
 
 impl ApplyPatchToolView {
+    /// Create a new apply-patch view, extracting affected file paths from the diff.
     pub fn new(diff_content: String) -> Self {
         // Extract file paths from diff headers
         let files: Vec<String> = diff_content
@@ -311,6 +356,7 @@ impl ApplyPatchToolView {
         }
     }
 
+    /// Render the apply-patch view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let mut lines = vec![Line::from(vec![
             Span::styled(
@@ -350,15 +396,19 @@ impl ApplyPatchToolView {
     }
 }
 
+/// View for a todo-write tool call that displays the full todo list.
 pub struct TodoWriteToolView {
+    /// List of (content, status) pairs representing each todo entry.
     pub items: Vec<(String, TodoStatus)>,
 }
 
 impl TodoWriteToolView {
+    /// Create a new todo-write view from a list of items.
     pub fn new(items: Vec<(String, TodoStatus)>) -> Self {
         Self { items }
     }
 
+    /// Render the todo-write view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let mut lines = vec![Line::from(Span::styled(
             "Todo List",

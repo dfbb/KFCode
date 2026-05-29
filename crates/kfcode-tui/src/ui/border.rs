@@ -1,9 +1,18 @@
+//! Border character sets and style variants for drawing TUI panels.
+
+/// The six characters used to draw a rectangular border.
 pub struct BorderChars {
+    /// Top-left corner character.
     pub top_left: char,
+    /// Top-right corner character.
     pub top_right: char,
+    /// Bottom-left corner character.
     pub bottom_left: char,
+    /// Bottom-right corner character.
     pub bottom_right: char,
+    /// Horizontal line character.
     pub horizontal: char,
+    /// Vertical line character.
     pub vertical: char,
 }
 
@@ -27,6 +36,7 @@ impl Default for BorderChars {
 }
 
 impl BorderChars {
+    /// Rounded corners using box-drawing characters (╭╮╰╯).
     pub fn rounded() -> Self {
         Self {
             top_left: '╭',
@@ -38,6 +48,7 @@ impl BorderChars {
         }
     }
 
+    /// Square corners using standard box-drawing characters (┌┐└┘).
     pub fn squared() -> Self {
         Self {
             top_left: '┌',
@@ -49,6 +60,7 @@ impl BorderChars {
         }
     }
 
+    /// Heavy/thick border using double-weight box-drawing characters (┏┓┗┛).
     pub fn thick() -> Self {
         Self {
             top_left: '┏',
@@ -60,6 +72,7 @@ impl BorderChars {
         }
     }
 
+    /// Invisible border using space characters.
     pub fn empty() -> Self {
         Self {
             top_left: ' ',
@@ -71,6 +84,7 @@ impl BorderChars {
         }
     }
 
+    /// A minimal border with only a vertical bar and a custom bottom-left corner.
     pub fn custom(vertical: char, bottom_left: char) -> Self {
         Self {
             top_left: ' ',
@@ -83,12 +97,19 @@ impl BorderChars {
     }
 }
 
+/// High-level border style selector.
 #[derive(Clone)]
 pub enum BorderStyle {
+    /// No border drawn.
     None,
+    /// Single-line border.
     Single,
+    /// Double-line border.
     Double,
+    /// Rounded-corner border.
     Rounded,
+    /// Heavy/thick border.
     Thick,
+    /// Fully custom character set.
     Custom(BorderChars),
 }

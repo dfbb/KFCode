@@ -1,3 +1,4 @@
+//! Transient notification toast with enter/exit slide and fade animations.
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -11,6 +12,7 @@ const TRANSITION_MS: u64 = 120;
 const SLIDE_OFFSET_COLS: u16 = 4;
 const MIN_FADE_ALPHA: f32 = 0.45;
 
+/// A short-lived notification that slides in, stays visible, then slides out.
 pub struct Toast {
     message: Option<String>,
     variant: ToastVariant,
@@ -19,11 +21,16 @@ pub struct Toast {
     phase_elapsed_ms: u64,
 }
 
+/// Visual severity of a toast notification.
 #[derive(Clone, Copy)]
 pub enum ToastVariant {
+    /// Neutral informational message.
     Info,
+    /// Operation succeeded.
     Success,
+    /// Non-critical warning.
     Warning,
+    /// Error or failure.
     Error,
 }
 
@@ -35,6 +42,7 @@ enum ToastPhase {
 }
 
 impl Toast {
+    /// Create a new idle toast with no message.
     pub fn new() -> Self {
         Self {
             message: None,
@@ -45,6 +53,7 @@ impl Toast {
         }
     }
 
+    /// Display a new message, resetting the animation to the entering phase.
     pub fn show(&mut self, variant: ToastVariant, message: &str, duration_ms: u64) {
         self.variant = variant;
         self.message = Some(message.to_string());
@@ -53,6 +62,7 @@ impl Toast {
         self.phase_elapsed_ms = 0;
     }
 
+    /// Advance the animation by `delta_ms` milliseconds; returns `true` if a redraw is needed.
     pub fn tick(&mut self, delta_ms: u64) -> bool {
         if self.message.is_none() {
             return false;
@@ -88,16 +98,19 @@ impl Toast {
             && self.phase_elapsed_ms != previous_elapsed
     }
 
+    /// Returns `true` while a message is being displayed.
     pub fn is_visible(&self) -> bool {
         self.message.is_some()
     }
 
+    /// Horizontal column offset to apply during enter/exit slide animation.
     pub fn slide_offset(&self) -> u16 {
         let progress = self.animation_progress();
         let hidden = (1.0 - progress) * SLIDE_OFFSET_COLS as f32;
         hidden.round() as u16
     }
 
+    /// Calculate the number of terminal rows needed to display the current message at `width` columns.
     pub fn desired_height(&self, width: u16) -> u16 {
         let Some(msg) = self.message.as_ref() else {
             return 0;
@@ -111,6 +124,7 @@ impl Toast {
         (lines + 2).clamp(3, 6)
     }
 
+    /// Render the toast into the given frame area using the application theme.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if let Some(msg) = &self.message {
             let progress = self.animation_progress();

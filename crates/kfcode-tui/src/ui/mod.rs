@@ -1,3 +1,4 @@
+//! UI utilities: border styles, clipboard access, layout helpers, text selection, and text formatting.
 mod border;
 mod clipboard;
 mod layout;

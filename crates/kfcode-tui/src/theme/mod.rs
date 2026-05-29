@@ -1,3 +1,4 @@
+//! Application theme system with built-in presets and JSON-based color resolution.
 use once_cell::sync::Lazy;
 use ratatui::style::{Color, Modifier, Style};
 use serde::Deserialize;
@@ -57,60 +58,106 @@ static PRESET_THEMES: Lazy<HashMap<String, ThemeFile>> = Lazy::new(|| {
         .collect()
 });
 
+/// Whether the theme should use dark or light color values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemeMode {
+    /// Dark background variant.
     Dark,
+    /// Light background variant.
     Light,
 }
 
+/// Full color palette for the application UI.
 #[derive(Clone, Debug)]
 pub struct Theme {
+    /// Primary text color.
     pub text: Color,
+    /// Subdued text color for secondary information.
     pub text_muted: Color,
+    /// Main background color.
     pub background: Color,
+    /// Background color for panels and cards.
     pub background_panel: Color,
+    /// Background color for interactive elements.
     pub background_element: Color,
+    /// Default border color.
     pub border: Color,
+    /// Primary accent color.
     pub primary: Color,
+    /// Secondary accent color.
     pub secondary: Color,
+    /// Color for success states.
     pub success: Color,
+    /// Color for warning states.
     pub warning: Color,
+    /// Color for error states.
     pub error: Color,
+    /// Color for informational states.
     pub info: Color,
+    /// Color for added diff lines.
     pub diff_added: Color,
+    /// Color for removed diff lines.
     pub diff_removed: Color,
+    /// Per-agent accent colors cycled by agent index.
     pub agent_colors: Vec<Color>,
     // Extended semantic tokens
+    /// Background color for menus and dropdowns.
     pub background_menu: Color,
+    /// Border color for the focused/active element.
     pub border_active: Color,
+    /// Subtle border color for non-focused elements.
     pub border_subtle: Color,
     // Markdown tokens
+    /// Color for markdown headings.
     pub markdown_heading: Color,
+    /// Color for link URLs.
     pub markdown_link: Color,
+    /// Color for link display text.
     pub markdown_link_text: Color,
+    /// Color for inline code spans.
     pub markdown_code: Color,
+    /// Background color for inline code spans.
     pub markdown_code_bg: Color,
+    /// Color for block-quote markers.
     pub markdown_block_quote: Color,
+    /// Color for emphasized (italic) text.
     pub markdown_emph: Color,
+    /// Color for strong (bold) text.
     pub markdown_strong: Color,
+    /// Color for horizontal rules and table borders.
     pub markdown_horizontal_rule: Color,
+    /// Color for unordered list item bullets.
     pub markdown_list_item: Color,
+    /// Color for ordered list item numbers.
     pub markdown_list_enumeration: Color,
+    /// Color for image placeholder icons.
     pub markdown_image: Color,
+    /// Color for image URL text.
     pub markdown_image_text: Color,
+    /// Color for the code block language label.
     pub markdown_code_block: Color,
     // Syntax tokens
+    /// Color for code comments.
     pub syntax_comment: Color,
+    /// Color for language keywords.
     pub syntax_keyword: Color,
+    /// Color for function names.
     pub syntax_function: Color,
+    /// Color for string literals.
     pub syntax_string: Color,
+    /// Color for numeric literals.
     pub syntax_number: Color,
     // Diff background tokens
+    /// Background tint for added diff lines.
     pub diff_added_bg: Color,
+    /// Background tint for removed diff lines.
     pub diff_removed_bg: Color,
+    /// Background tint for unchanged context lines in diffs.
     pub diff_context_bg: Color,
     // Tool semantic tokens
+    /// Color for tool status icons.
     pub tool_icon: Color,
+    /// Color for tool block borders.
     pub tool_border: Color,
 }
 
@@ -128,22 +175,27 @@ impl Default for Theme {
 }
 
 impl Theme {
+    /// Return the names of all built-in preset themes.
     pub fn builtin_theme_names() -> Vec<&'static str> {
         PRESET_SOURCES.iter().map(|(name, _)| *name).collect()
     }
 
+    /// Load the default dark theme.
     pub fn dark() -> Self {
         Self::from_preset("kfcode", ThemeMode::Dark).unwrap_or_else(Self::fallback_dark)
     }
 
+    /// Load the default light theme.
     pub fn light() -> Self {
         Self::from_preset("kfcode", ThemeMode::Light).unwrap_or_else(Self::fallback_light)
     }
 
+    /// Return the agent accent color for the given zero-based agent index.
     pub fn agent_color(&self, index: usize) -> Color {
         self.agent_colors[index % self.agent_colors.len()]
     }
 
+    /// Look up a theme by name, supporting `@light`/`@dark` suffixes.
     pub fn by_name(name: &str) -> Option<Self> {
         let normalized = name.trim();
         if normalized.is_empty() {
@@ -172,6 +224,7 @@ impl Theme {
         Self::from_preset(normalized, ThemeMode::Dark)
     }
 
+    /// Load a named preset in the given mode, returning `None` if the preset does not exist.
     pub fn from_preset(name: &str, mode: ThemeMode) -> Option<Self> {
         let theme = PRESET_THEMES.get(name)?;
         Some(build_theme(theme, mode))
@@ -636,29 +689,36 @@ fn ansi_to_color(code: u64) -> Color {
     Color::Reset
 }
 
+/// A collection of static style helpers for common UI patterns.
 pub struct Styles;
 
 impl Styles {
+    /// Bold style for titles and headings.
     pub fn title() -> Style {
         Style::default().add_modifier(Modifier::BOLD)
     }
 
+    /// Muted gray style for secondary text.
     pub fn muted() -> Style {
         Style::default().fg(Color::Rgb(128, 128, 128))
     }
 
+    /// Green style for success indicators.
     pub fn success() -> Style {
         Style::default().fg(Color::Rgb(80, 200, 120))
     }
 
+    /// Red style for error indicators.
     pub fn error() -> Style {
         Style::default().fg(Color::Rgb(255, 80, 80))
     }
 
+    /// Yellow style for warning indicators.
     pub fn warning() -> Style {
         Style::default().fg(Color::Rgb(255, 200, 80))
     }
 
+    /// Reversed-video style for selected items.
     pub fn selected() -> Style {
         Style::default().add_modifier(Modifier::REVERSED)
     }

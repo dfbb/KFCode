@@ -1,3 +1,4 @@
+//! Markdown rendering pipeline: parser, renderer, code blocks, and syntax highlighting.
 mod code_block;
 mod parser;
 mod renderer;

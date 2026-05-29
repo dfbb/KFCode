@@ -1,3 +1,4 @@
+//! React-inspired hooks for managing state and side effects in TUI components.
 mod use_effect;
 mod use_state;
 

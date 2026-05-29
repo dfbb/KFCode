@@ -1,5 +1,7 @@
+//! Convenience wrappers around ratatui layout primitives.
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
+/// Split `area` horizontally according to the given constraints.
 pub fn horizontal_split(area: Rect, constraints: Vec<Constraint>) -> Vec<Rect> {
     Layout::default()
         .direction(Direction::Horizontal)
@@ -8,6 +10,7 @@ pub fn horizontal_split(area: Rect, constraints: Vec<Constraint>) -> Vec<Rect> {
         .to_vec()
 }
 
+/// Split `area` vertically according to the given constraints.
 pub fn vertical_split(area: Rect, constraints: Vec<Constraint>) -> Vec<Rect> {
     Layout::default()
         .direction(Direction::Vertical)
@@ -16,6 +19,7 @@ pub fn vertical_split(area: Rect, constraints: Vec<Constraint>) -> Vec<Rect> {
         .to_vec()
 }
 
+/// Return a centered rect of the given `width` and `height` within `area`.
 pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -36,6 +40,7 @@ pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
         .split(popup_layout[1])[1]
 }
 
+/// Return the bottom `height` rows of `area` as a footer rect.
 pub fn footer(area: Rect, height: u16) -> Rect {
     let layout = Layout::default()
         .direction(Direction::Vertical)
@@ -44,6 +49,7 @@ pub fn footer(area: Rect, height: u16) -> Rect {
     layout[1]
 }
 
+/// Return the top `height` rows of `area` as a header rect.
 pub fn header(area: Rect, height: u16) -> Rect {
     let layout = Layout::default()
         .direction(Direction::Vertical)
@@ -52,6 +58,7 @@ pub fn header(area: Rect, height: u16) -> Rect {
     layout[0]
 }
 
+/// Split `area` into a left sidebar of `width` columns and the remaining content area.
 pub fn sidebar_left(area: Rect, width: u16) -> (Rect, Rect) {
     let layout = Layout::default()
         .direction(Direction::Horizontal)
@@ -60,6 +67,7 @@ pub fn sidebar_left(area: Rect, width: u16) -> (Rect, Rect) {
     (layout[0], layout[1])
 }
 
+/// Split `area` into the content area and a right sidebar of `width` columns.
 pub fn sidebar_right(area: Rect, width: u16) -> (Rect, Rect) {
     let layout = Layout::default()
         .direction(Direction::Horizontal)

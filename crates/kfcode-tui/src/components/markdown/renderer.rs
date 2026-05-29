@@ -1,3 +1,4 @@
+//! Converts a markdown string into ratatui `Line` spans for terminal display.
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::{
     layout::Rect,
@@ -11,9 +12,11 @@ use unicode_width::UnicodeWidthStr;
 use super::code_block::{CodeBlock, CodeTheme};
 use crate::theme::Theme;
 
+/// Renders markdown text to ratatui lines using the application theme.
 pub struct MarkdownRenderer {
     theme: Theme,
     code_theme: CodeTheme,
+    // When true, code blocks are shown as a collapsed summary line.
     concealed: bool,
 }
 
@@ -122,6 +125,7 @@ impl TableBuilder {
 }
 
 impl MarkdownRenderer {
+    /// Create a renderer using the given application theme.
     pub fn new(theme: Theme) -> Self {
         let code_theme = CodeTheme::from_app_theme(&theme);
         Self {
@@ -131,17 +135,20 @@ impl MarkdownRenderer {
         }
     }
 
+    /// When `concealed` is true, code blocks are replaced with a summary line.
     pub fn with_concealed(mut self, concealed: bool) -> Self {
         self.concealed = concealed;
         self
     }
 
+    /// Render markdown text directly into a ratatui frame at the given area.
     pub fn render(&self, text: &str, frame: &mut Frame, area: Rect) {
         let lines = self.to_lines(text);
         let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
         frame.render_widget(paragraph, area);
     }
 
+    /// Convert markdown text to a list of ratatui lines without rendering.
     pub fn to_lines(&self, text: &str) -> Vec<Line<'static>> {
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);

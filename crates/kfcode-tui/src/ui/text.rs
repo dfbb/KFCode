@@ -1,6 +1,8 @@
+//! Unicode-aware text formatting helpers for terminal display.
 use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
+/// Truncate `text` to at most `max_width` display columns, appending "..." if cut.
 pub fn truncate(text: &str, max_width: usize) -> String {
     let width = UnicodeWidthStr::width(text);
     if width <= max_width {
@@ -24,6 +26,7 @@ pub fn truncate(text: &str, max_width: usize) -> String {
     result
 }
 
+/// Left-pad `text` with spaces to reach `width` display columns.
 pub fn pad_left(text: &str, width: usize) -> String {
     let text_width = text.width();
     if text_width >= width {
@@ -32,6 +35,7 @@ pub fn pad_left(text: &str, width: usize) -> String {
     format!("{}{}", " ".repeat(width - text_width), text)
 }
 
+/// Right-pad `text` with spaces to reach `width` display columns.
 pub fn pad_right(text: &str, width: usize) -> String {
     let text_width = text.width();
     if text_width >= width {
@@ -40,6 +44,7 @@ pub fn pad_right(text: &str, width: usize) -> String {
     format!("{}{}", text, " ".repeat(width - text_width))
 }
 
+/// Center `text` within `width` display columns by left-padding with spaces.
 pub fn center_text(text: &str, width: usize) -> String {
     let text_width = text.width();
     if text_width >= width {
@@ -49,6 +54,7 @@ pub fn center_text(text: &str, width: usize) -> String {
     format!("{}{}", " ".repeat(left_pad), text)
 }
 
+/// Wrap `text` in a styled `Span` with the given foreground color.
 pub fn highlight_text<'a>(text: &'a str, color: ratatui::style::Color) -> Span<'a> {
     Span::styled(text, ratatui::style::Style::default().fg(color))
 }

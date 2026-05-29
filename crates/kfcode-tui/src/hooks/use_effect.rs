@@ -1,19 +1,23 @@
+//! Side-effect hook that runs a closure and stores an optional cleanup function.
 use std::cell::RefCell;
 use std::rc::Rc;
 
 type CleanupFn = Box<dyn FnMut()>;
 
+/// Runs a side-effect closure and invokes its cleanup when re-run or dropped.
 pub struct UseEffect {
     cleanup: Rc<RefCell<Option<CleanupFn>>>,
 }
 
 impl UseEffect {
+    /// Create a new idle effect hook with no pending cleanup.
     pub fn new() -> Self {
         Self {
             cleanup: Rc::new(RefCell::new(None)),
         }
     }
 
+    /// Run `effect`, calling any previous cleanup first and storing the new one.
     pub fn run<F>(&self, effect: F)
     where
         F: FnOnce() -> Option<Box<dyn FnMut()>>,

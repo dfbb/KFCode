@@ -1,3 +1,4 @@
+//! Syntax-highlighted code block rendering for the markdown component.
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -5,17 +6,22 @@ use ratatui::{
 
 use super::syntax;
 
+/// A fenced code block extracted from a markdown document.
 #[derive(Clone, Debug)]
 pub struct CodeBlock {
+    /// Optional language hint from the opening fence (e.g. "rust").
     pub language: Option<String>,
+    /// Raw source text of the block.
     pub code: String,
 }
 
 impl CodeBlock {
+    /// Create a new code block with the given language hint and source text.
     pub fn new(language: Option<String>, code: String) -> Self {
         Self { language, code }
     }
 
+    /// Convert the block into per-line spans, using syntax highlighting when available.
     pub fn to_lines(&self, theme: &CodeTheme) -> Vec<Vec<Span<'static>>> {
         if let Some(lines) = syntax::highlight_code(
             &self.code,
@@ -342,13 +348,21 @@ fn is_punctuation(ch: char) -> bool {
 }
 
 #[derive(Clone, Debug)]
+/// A color palette used when rendering code blocks.
 pub struct CodeTheme {
+    /// Default text color.
     pub text: Color,
+    /// Color for language keywords.
     pub keyword: Color,
+    /// Color for string literals.
     pub string: Color,
+    /// Color for numeric literals.
     pub number: Color,
+    /// Color for comments.
     pub comment: Color,
+    /// Color for punctuation and operators.
     pub punctuation: Color,
+    /// Color for function names.
     pub function: Color,
 }
 
@@ -367,6 +381,7 @@ impl Default for CodeTheme {
 }
 
 impl CodeTheme {
+    /// Build a `CodeTheme` from the application-level `Theme`.
     pub fn from_app_theme(theme: &crate::theme::Theme) -> Self {
         Self {
             text: theme.text,

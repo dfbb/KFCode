@@ -1,3 +1,4 @@
+//! Tool call data types and generic tool call / result views.
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,21 +9,30 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Controls how a tool call is laid out in the message stream.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToolRenderMode {
+    /// Compact single-line display alongside surrounding text.
     Inline,
+    /// Full-width block with a left border.
     Block,
 }
 
+/// A single tool invocation with its arguments and current execution status.
 #[derive(Clone, Debug)]
 pub struct ToolCall {
+    /// Unique identifier for this invocation.
     pub id: String,
+    /// Name of the tool being called.
     pub name: String,
+    /// Raw JSON arguments string.
     pub arguments: String,
+    /// Current execution status.
     pub status: ToolCallStatus,
 }
 
 impl ToolCall {
+    /// Return the preferred render mode for this tool by name.
     pub fn render_mode(&self) -> ToolRenderMode {
         match self.name.as_str() {
             "glob" | "grep" | "list" | "webfetch" | "websearch" | "skill" | "read" => {
@@ -36,23 +46,31 @@ impl ToolCall {
     }
 }
 
+/// Lifecycle state of a tool invocation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToolCallStatus {
+    /// Queued but not yet started.
     Pending,
+    /// Currently executing.
     Running,
+    /// Finished successfully.
     Completed,
+    /// Finished with an error.
     Failed,
 }
 
+/// Generic view for a tool call that has no dedicated specialized view.
 pub struct ToolCallView {
     tool_call: ToolCall,
 }
 
 impl ToolCallView {
+    /// Wrap a `ToolCall` for rendering.
     pub fn new(tool_call: ToolCall) -> Self {
         Self { tool_call }
     }
 
+    /// Render the tool call block into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let status_icon = match self.tool_call.status {
             ToolCallStatus::Pending => "◯",
@@ -116,14 +134,20 @@ impl ToolCallView {
     }
 }
 
+/// Displays the result returned by a tool call.
 pub struct ToolResultView {
+    /// Name of the tool that produced this result.
     pub tool_name: String,
+    /// Raw result text.
     pub result: String,
+    /// Whether the tool reported an error.
     pub is_error: bool,
+    /// Whether the result was truncated for display.
     pub truncated: bool,
 }
 
 impl ToolResultView {
+    /// Create a result view, automatically setting `truncated` when the result exceeds 20 lines.
     pub fn new(tool_name: String, result: String, is_error: bool) -> Self {
         let line_count = result.lines().count();
         Self {
@@ -134,6 +158,7 @@ impl ToolResultView {
         }
     }
 
+    /// Render the tool result block into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let icon = if self.is_error { "✗" } else { "✓" };
         let color = if self.is_error {
@@ -187,14 +212,20 @@ impl ToolResultView {
     }
 }
 
+/// Displays a bash command invocation and its output.
 pub struct BashToolView {
+    /// The shell command that was executed.
     pub command: String,
+    /// Captured stdout/stderr output, if available.
     pub output: Option<String>,
+    /// Process exit code, if the command has finished.
     pub exit_code: Option<i32>,
+    /// Whether the command is still running.
     pub running: bool,
 }
 
 impl BashToolView {
+    /// Create a new bash view for the given command.
     pub fn new(command: String) -> Self {
         Self {
             command,
@@ -204,6 +235,7 @@ impl BashToolView {
         }
     }
 
+    /// Render the bash tool view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let status_color = if self.running {
             theme.warning
@@ -262,13 +294,18 @@ impl BashToolView {
     }
 }
 
+/// Displays a file read operation with optional line-range and content preview.
 pub struct ReadToolView {
+    /// Path of the file being read.
     pub file_path: String,
+    /// File content, if already loaded.
     pub content: Option<String>,
+    /// Optional line range (start, end) that was requested.
     pub line_range: Option<(usize, usize)>,
 }
 
 impl ReadToolView {
+    /// Create a new read view for the given file path.
     pub fn new(file_path: String) -> Self {
         Self {
             file_path,
@@ -277,6 +314,7 @@ impl ReadToolView {
         }
     }
 
+    /// Render the read tool view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let mut lines = vec![Line::from(vec![
             Span::styled("📖 ", Style::default()),
@@ -325,13 +363,18 @@ impl ReadToolView {
     }
 }
 
+/// Displays a file write operation with an optional content preview.
 pub struct WriteToolView {
+    /// Path of the file being written.
     pub file_path: String,
+    /// Short preview of the content being written.
     pub content_preview: Option<String>,
+    /// Whether the write has completed.
     pub written: bool,
 }
 
 impl WriteToolView {
+    /// Create a new write view for the given file path.
     pub fn new(file_path: String) -> Self {
         Self {
             file_path,
@@ -340,6 +383,7 @@ impl WriteToolView {
         }
     }
 
+    /// Render the write tool view into the given frame area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let status_icon = if self.written { "✓" } else { "..." };
         let status_color = if self.written {

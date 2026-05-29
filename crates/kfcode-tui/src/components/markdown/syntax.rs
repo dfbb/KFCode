@@ -1,3 +1,4 @@
+//! Syntect-backed syntax highlighting for fenced code blocks.
 use once_cell::sync::Lazy;
 use ratatui::{
     style::{Color, Modifier, Style},
@@ -19,6 +20,7 @@ const DARK_THEME: &str = "base16-ocean.dark";
 const LIGHT_THEME: &str = "base16-ocean.light";
 const FALLBACK_THEME: &str = "InspiredGitHub";
 
+/// Highlight `code` for the given `language` and return per-line span vectors, or `None` if the language is unknown.
 pub fn highlight_code(
     code: &str,
     language: &str,
