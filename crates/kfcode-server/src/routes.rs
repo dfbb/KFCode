@@ -2938,17 +2938,21 @@ pub struct FileInfo {
 }
 
 fn project_root() -> Result<PathBuf> {
-    std::env::current_dir()
-        .map_err(|e| ApiError::BadRequest(format!("Failed to resolve current directory: {}", e)))
+    std::env::current_dir().map_err(|e| {
+        tracing::warn!(error = %e, "failed to resolve current directory");
+        ApiError::BadRequest("file system error".into())
+    })
 }
 
 fn canonicalize_within_root(path: &FsPath, root: &FsPath) -> Result<PathBuf> {
-    let canonical_root = root
-        .canonicalize()
-        .map_err(|e| ApiError::BadRequest(format!("Failed to resolve project root: {}", e)))?;
-    let canonical_path = path
-        .canonicalize()
-        .map_err(|e| ApiError::BadRequest(format!("Failed to resolve path: {}", e)))?;
+    let canonical_root = root.canonicalize().map_err(|e| {
+        tracing::warn!(error = %e, "failed to canonicalize project root");
+        ApiError::BadRequest("invalid path".into())
+    })?;
+    let canonical_path = path.canonicalize().map_err(|e| {
+        tracing::warn!(error = %e, "failed to canonicalize path");
+        ApiError::BadRequest("invalid path".into())
+    })?;
 
     if !canonical_path.starts_with(&canonical_root) {
         return Err(ApiError::BadRequest(
@@ -3029,7 +3033,10 @@ async fn read_file(Query(query): Query<ListFilesQuery>) -> Result<Json<serde_jso
             Ok(content) => Ok(Json(
                 serde_json::json!({ "content": content, "path": query.path }),
             )),
-            Err(e) => Err(ApiError::BadRequest(format!("Failed to read file: {}", e))),
+            Err(e) => {
+                tracing::warn!(error = %e, path = %path.display(), "failed to read file");
+                Err(ApiError::BadRequest("file system error".into()))
+            }
         }
     } else {
         Err(ApiError::BadRequest("Path is not a file".to_string()))
