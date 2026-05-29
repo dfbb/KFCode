@@ -202,7 +202,6 @@ fn extract_binary(archive: &Path, asset: &PlatformAsset, out_dir: &Path) -> anyh
 #[cfg(test)]
 mod extract_tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn extracts_binary_from_targz() {
