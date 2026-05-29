@@ -3,7 +3,7 @@
 # Run in a separate terminal to see API logs. Then run start-web-app.sh in another terminal.
 
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 RUST_PORT="${RUST_PORT:-4096}"
 
