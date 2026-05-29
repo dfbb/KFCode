@@ -348,10 +348,18 @@ fn variant_to_bootstrap(
 }
 
 fn auth_data_dir() -> PathBuf {
-    if let Ok(path) = std::env::var("KFCODE_DATA_DIR") {
-        let trimmed = path.trim();
+    if let Ok(val) = std::env::var("KFCODE_DATA_DIR") {
+        let trimmed = val.trim();
         if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
+            let path = PathBuf::from(trimmed);
+            if path.is_absolute() {
+                return path;
+            } else {
+                tracing::warn!(
+                    path = %trimmed,
+                    "KFCODE_DATA_DIR is not absolute, ignoring"
+                );
+            }
         }
     }
 
