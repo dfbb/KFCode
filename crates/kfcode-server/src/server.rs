@@ -1,3 +1,4 @@
+//! Server state construction, plugin bootstrap, CORS configuration, and Axum server startup.
 use async_trait::async_trait;
 use axum::http::{header::HeaderValue, request::Parts};
 use futures::StreamExt;
@@ -28,6 +29,7 @@ use kfcode_storage::{Database, MessageRepository, SessionRepository};
 
 use crate::routes;
 
+/// Default bind address used when no explicit address is provided.
 const DEFAULT_SERVER_URL: &str = "http://127.0.0.1:4096";
 
 struct PluginBridgeFetchProxy {
@@ -83,6 +85,8 @@ impl CustomFetchProxy for PluginBridgeFetchProxy {
     }
 }
 
+/// Registers or unregisters the custom fetch proxy for a provider based on the plugin auth bridge result.
+/// Also mirrors the proxy to `github-copilot-enterprise` when the provider is `github-copilot`.
 pub(crate) fn sync_custom_fetch_proxy(
     provider_id: &str,
     bridge: Arc<PluginAuthBridge>,
@@ -109,6 +113,7 @@ pub(crate) fn sync_custom_fetch_proxy(
     }
 }
 
+/// Shared application state threaded through all Axum route handlers.
 pub struct ServerState {
     pub sessions: Mutex<SessionManager>,
     pub providers: ProviderRegistry,
@@ -119,6 +124,7 @@ pub struct ServerState {
 }
 
 impl ServerState {
+    /// Creates a minimal in-memory state with no storage backend.
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(1024);
         Self {
@@ -131,10 +137,12 @@ impl ServerState {
         }
     }
 
+    /// Creates state with a SQLite storage backend, loading sessions and bootstrapping providers.
     pub async fn new_with_storage() -> anyhow::Result<Self> {
         Self::new_with_storage_for_url(DEFAULT_SERVER_URL.to_string()).await
     }
 
+    /// Creates state with a SQLite storage backend, using the given server URL for plugin context.
     pub async fn new_with_storage_for_url(server_url: String) -> anyhow::Result<Self> {
         let mut state = Self::new();
         let auth_manager = Arc::new(AuthManager::load_from_file(&auth_data_dir()).await);
@@ -170,6 +178,7 @@ impl ServerState {
         Ok(state)
     }
 
+    /// Broadcasts a JSON event string to all connected SSE subscribers.
     pub fn broadcast(&self, event: &str) {
         let _ = self.event_bus.send(event.to_string());
     }
@@ -194,6 +203,7 @@ impl ServerState {
         Ok(())
     }
 
+    /// Persists all in-memory sessions and their messages to the storage backend.
     pub async fn sync_sessions_to_storage(&self) -> anyhow::Result<()> {
         let (Some(session_repo), Some(message_repo)) = (&self.session_repo, &self.message_repo)
         else {
@@ -435,6 +445,8 @@ fn normalize_origin(origin: &str) -> Option<String> {
     }
 }
 
+/// Replaces the current CORS origin whitelist with the given list of origins.
+/// Origins are normalized by trimming whitespace and trailing slashes.
 pub fn set_cors_whitelist(origins: Vec<String>) {
     let mut next = HashSet::new();
     for origin in origins {
@@ -478,6 +490,7 @@ fn cors_layer() -> CorsLayer {
         .allow_headers(Any)
 }
 
+/// Binds to `addr`, builds the Axum app with storage-backed state, and serves requests until shutdown.
 pub async fn run_server(addr: SocketAddr) -> anyhow::Result<()> {
     let state = Arc::new(ServerState::new_with_storage_for_url(format!("http://{}", addr)).await?);
 
@@ -495,6 +508,7 @@ pub async fn run_server(addr: SocketAddr) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Binds to `addr` and serves requests using the provided pre-built state.
 pub async fn run_server_with_state(
     addr: SocketAddr,
     state: Arc<ServerState>,

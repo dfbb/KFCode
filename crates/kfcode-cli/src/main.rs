@@ -1,3 +1,7 @@
+//! Entry point and command dispatch for the `kfcode` CLI binary.
+//! Parses subcommands, wires up providers and agents, and delegates to the
+//! appropriate handler for each operation (TUI, run, serve, session, etc.).
+
 use clap::{Parser, Subcommand, ValueEnum};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -30,6 +34,7 @@ use kfcode_tool::skill::list_available_skills;
 use kfcode_tool::{registry::create_default_registry, ToolContext};
 use kfcode_types::{MessagePart, Session, SessionMessage};
 
+/// Top-level CLI structure parsed by clap; holds the optional subcommand.
 #[derive(Parser)]
 #[command(name = "kfcode")]
 #[command(about = "KFCode - Open source AI coding agent", long_about = None)]
@@ -38,6 +43,7 @@ struct Cli {
     command: Option<Commands>,
 }
 
+/// All top-level subcommands supported by the `kfcode` binary.
 #[derive(Subcommand)]
 enum Commands {
     #[command(about = "Start interactive TUI session")]
@@ -258,30 +264,35 @@ enum Commands {
     Version,
 }
 
+/// Output format for the `run` subcommand.
 #[derive(Clone, Debug, ValueEnum)]
 enum RunOutputFormat {
     Default,
     Json,
 }
 
+/// Output format for the `session list` subcommand.
 #[derive(Clone, Debug, ValueEnum)]
 enum SessionListFormat {
     Table,
     Json,
 }
 
+/// Output format for the `db` subcommand.
 #[derive(Clone, Debug, ValueEnum)]
 enum DbOutputFormat {
     Json,
     Tsv,
 }
 
+/// Subcommands for the `db` command.
 #[derive(Subcommand)]
 enum DbCommands {
     #[command(about = "Print the database path")]
     Path,
 }
 
+/// Subcommands for the `session` command.
 #[derive(Subcommand)]
 enum SessionCommands {
     #[command(about = "List sessions")]
@@ -305,6 +316,7 @@ enum SessionCommands {
     },
 }
 
+/// Subcommands for the `auth` command.
 #[derive(Subcommand)]
 enum AuthCommands {
     #[command(
@@ -326,6 +338,7 @@ enum AuthCommands {
     },
 }
 
+/// Subcommands for the `agent` command.
 #[derive(Subcommand)]
 enum AgentCommands {
     #[command(about = "List available agents")]
@@ -347,6 +360,7 @@ enum AgentCommands {
     },
 }
 
+/// Scope of an agent definition file: primary only, subagent only, or both.
 #[derive(Clone, Debug, ValueEnum)]
 enum AgentFileMode {
     All,
@@ -364,6 +378,7 @@ impl AgentFileMode {
     }
 }
 
+/// Subcommands for the `debug` command.
 #[derive(Subcommand)]
 enum DebugCommands {
     #[command(about = "Show important local paths")]
@@ -407,6 +422,7 @@ enum DebugCommands {
     },
 }
 
+/// Subcommands for `debug snapshot`.
 #[derive(Subcommand)]
 enum DebugSnapshotCommands {
     #[command(about = "Track current snapshot state")]
@@ -423,6 +439,7 @@ enum DebugSnapshotCommands {
     },
 }
 
+/// Subcommands for `debug file`.
 #[derive(Subcommand)]
 enum DebugFileCommands {
     #[command(about = "Search files by query")]
@@ -449,6 +466,7 @@ enum DebugFileCommands {
     },
 }
 
+/// Subcommands for `debug rg`.
 #[derive(Subcommand)]
 enum DebugRgCommands {
     #[command(about = "Show file tree using ripgrep")]
@@ -476,6 +494,7 @@ enum DebugRgCommands {
     },
 }
 
+/// Subcommands for `debug lsp`.
 #[derive(Subcommand)]
 enum DebugLspCommands {
     #[command(about = "Get diagnostics for a file")]
@@ -495,6 +514,7 @@ enum DebugLspCommands {
     },
 }
 
+/// Subcommands for the `mcp` command.
 #[derive(Subcommand)]
 enum McpCommands {
     #[command(about = "List MCP servers and status", alias = "ls")]
@@ -547,12 +567,14 @@ enum McpCommands {
     },
 }
 
+/// Subcommands for `mcp auth`.
 #[derive(Subcommand)]
 enum McpAuthCommands {
     #[command(about = "List OAuth-capable MCP servers and status", alias = "ls")]
     List,
 }
 
+/// Subcommands for the `github` command.
 #[derive(Subcommand)]
 enum GithubCommands {
     #[command(about = "Check GitHub CLI installation and auth status")]
@@ -789,6 +811,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Starts the TUI, optionally launching a local HTTP server first.
+///
+/// When `attach_url` is `None` a local server is spawned on `port`/`hostname`
+/// and the TUI connects to it; otherwise the TUI attaches to the given URL.
 async fn run_tui(
     project: Option<PathBuf>,
     model: Option<String>,
@@ -873,6 +899,7 @@ async fn run_tui(
     run_result
 }
 
+/// Resolves which session ID to use based on `--continue`, `--session`, and `--fork` flags.
 async fn resolve_requested_session(
     continue_last: bool,
     session: Option<String>,
@@ -902,6 +929,10 @@ async fn resolve_requested_session(
     Ok(selected)
 }
 
+/// Polls `base_url/health` until the server responds with 2xx or `timeout` elapses.
+///
+/// # Errors
+/// Returns an error if the server task exits early or the timeout is exceeded.
 async fn wait_for_server_ready(
     base_url: &str,
     timeout: Duration,
@@ -940,6 +971,8 @@ async fn wait_for_server_ready(
     }
 }
 
+/// Splits an optional `"provider/model"` string into `(provider, model_id)`.
+/// Returns `(None, Some(raw))` when no slash is present.
 fn parse_model_and_provider(model: Option<String>) -> (Option<String>, Option<String>) {
     let Some(raw) = model else {
         return (None, None);
@@ -954,6 +987,7 @@ fn parse_model_and_provider(model: Option<String>) -> (Option<String>, Option<St
     }
 }
 
+/// Returns `true` for common truthy string values (`1`, `true`, `yes`, `on`).
 fn parse_bool_env(value: &str) -> bool {
     matches!(
         value.trim().to_ascii_lowercase().as_str(),
@@ -961,6 +995,7 @@ fn parse_bool_env(value: &str) -> bool {
     )
 }
 
+/// Maps a file extension to an LSP language identifier string.
 fn infer_language_id(path: &Path) -> &'static str {
     match path
         .extension()
@@ -989,6 +1024,9 @@ fn infer_language_id(path: &Path) -> &'static str {
     }
 }
 
+/// Appends file or directory attachment blocks to `input` in a structured text format.
+///
+/// Directories are rendered as a tree; files are inlined verbatim (truncated at 120 KB).
 fn append_cli_file_attachments(input: &mut String, files: &[PathBuf]) -> anyhow::Result<()> {
     for file_path in files {
         let resolved = if file_path.is_absolute() {
@@ -1041,6 +1079,7 @@ fn append_cli_file_attachments(input: &mut String, files: &[PathBuf]) -> anyhow:
     Ok(())
 }
 
+/// Collects the run message from CLI args and, when stdin is not a terminal, appends piped input.
 fn collect_run_input(message: Vec<String>) -> anyhow::Result<String> {
     let mut input = message.join(" ");
     if !io::stdin().is_terminal() {
@@ -1056,6 +1095,7 @@ fn collect_run_input(message: Vec<String>) -> anyhow::Result<String> {
     Ok(input)
 }
 
+/// Minimal session info returned by the remote server's session list endpoint.
 #[derive(Debug, Deserialize)]
 struct RemoteSessionInfo {
     id: String,
@@ -1063,16 +1103,19 @@ struct RemoteSessionInfo {
     parent_id: Option<String>,
 }
 
+/// Subset of the remote `/config` response used to detect auto-share settings.
 #[derive(Debug, Deserialize)]
 struct RemoteConfigInfo {
     share: Option<String>,
 }
 
+/// Response from the remote session share endpoint containing the public share URL.
 #[derive(Debug, Deserialize)]
 struct RemoteShareInfo {
     url: String,
 }
 
+/// A single SSE event payload from the remote streaming endpoint.
 #[derive(Debug, Deserialize)]
 struct RemoteStreamEvent {
     #[serde(rename = "type")]
@@ -1083,6 +1126,7 @@ struct RemoteStreamEvent {
     tool_name: Option<String>,
 }
 
+/// Resolves or creates a session on the remote server, applying fork logic when requested.
 async fn resolve_remote_session(
     client: &reqwest::Client,
     base_url: &str,
@@ -1135,6 +1179,7 @@ async fn resolve_remote_session(
     Ok(created.id)
 }
 
+/// Enables sharing for `session_id` when requested by flag, env var, or server config.
 async fn maybe_share_remote_session(
     client: &reqwest::Client,
     base_url: &str,
@@ -1161,6 +1206,7 @@ async fn maybe_share_remote_session(
     Ok(())
 }
 
+/// Reads an SSE response stream and prints events to stdout according to `format`.
 async fn consume_remote_sse(
     response: reqwest::Response,
     session_id: &str,
@@ -1281,6 +1327,7 @@ async fn consume_remote_sse(
     Ok(())
 }
 
+/// Sends a message to a running remote server and streams the response.
 async fn run_non_interactive_attach(
     base_url: String,
     input: String,
@@ -1330,6 +1377,8 @@ async fn run_non_interactive_attach(
     consume_remote_sse(response, &session_id, format).await
 }
 
+/// Executes the `run` subcommand: collects input, optionally attaches to a remote server,
+/// and runs a single-shot or interactive chat session.
 async fn run_non_interactive(
     message: Vec<String>,
     command: Option<String>,
@@ -1423,6 +1472,7 @@ async fn run_non_interactive(
     Ok(())
 }
 
+/// Runs an interactive or single-shot chat session using the local agent executor.
 async fn run_chat_session(
     model: Option<String>,
     provider: Option<String>,
@@ -1583,6 +1633,7 @@ async fn run_chat_session(
     Ok(())
 }
 
+/// Sends `input` to the agent executor and streams the response to stdout.
 async fn process_message(executor: &mut AgentExecutor, input: &str) -> anyhow::Result<()> {
     print!("\nAssistant: ");
     io::stdout().flush()?;
@@ -1622,6 +1673,7 @@ async fn process_message(executor: &mut AgentExecutor, input: &str) -> anyhow::R
     Ok(())
 }
 
+/// Prints all available models grouped by provider to stdout.
 fn list_models_interactive(registry: &ProviderRegistry) {
     println!("\nAvailable Models:\n");
     for provider in registry.list() {
@@ -1635,6 +1687,7 @@ fn list_models_interactive(registry: &ProviderRegistry) {
     println!();
 }
 
+/// Prints configured providers and their model counts to stdout.
 fn list_providers_interactive(registry: &ProviderRegistry) {
     println!("\nConfigured Providers:\n");
     for provider in registry.list() {
@@ -1644,6 +1697,10 @@ fn list_providers_interactive(registry: &ProviderRegistry) {
     println!();
 }
 
+/// Validates that `model_id` exists in the registry and prints a confirmation.
+///
+/// # Note
+/// The executor model is not actually switched; this is a stub for interactive parity.
 fn select_model(
     _executor: &mut AgentExecutor,
     model_id: &str,
@@ -1660,8 +1717,10 @@ fn select_model(
     Ok(())
 }
 
+/// Default URL used to reach the plugin subprocess server when `KFCODE_SERVER_URL` is unset.
 const DEFAULT_PLUGIN_SERVER_URL: &str = "http://127.0.0.1:4096";
 
+/// Builds a `ProviderRegistry` from the loaded config and any plugin-supplied auth tokens.
 async fn setup_providers(config: &kfcode_config::Config) -> anyhow::Result<ProviderRegistry> {
     let auth_store = load_plugin_auth_store(config).await;
 
@@ -1695,6 +1754,7 @@ fn convert_config_providers(
         .collect()
 }
 
+/// Converts a `kfcode_config::ProviderConfig` to the bootstrap `ConfigProvider` format.
 fn provider_to_bootstrap(provider: &kfcode_config::ProviderConfig) -> BootstrapConfigProvider {
     let mut options = provider.options.clone().unwrap_or_default();
     if let Some(api_key) = &provider.api_key {
@@ -1727,6 +1787,7 @@ fn provider_to_bootstrap(provider: &kfcode_config::ProviderConfig) -> BootstrapC
     }
 }
 
+/// Converts a `kfcode_config::ModelConfig` to the bootstrap `ConfigModel` format.
 fn model_to_bootstrap(id: &str, model: &kfcode_config::ModelConfig) -> BootstrapConfigModel {
     let mut options = HashMap::new();
     if let Some(api_key) = &model.api_key {
@@ -1756,6 +1817,7 @@ fn model_to_bootstrap(id: &str, model: &kfcode_config::ModelConfig) -> Bootstrap
     }
 }
 
+/// Converts a `kfcode_config::ModelVariantConfig` to the bootstrap variant map format.
 fn variant_to_bootstrap(
     variant: &kfcode_config::ModelVariantConfig,
 ) -> HashMap<String, serde_json::Value> {
@@ -1766,6 +1828,9 @@ fn variant_to_bootstrap(
     values
 }
 
+/// Loads plugin auth bridges and returns a map of provider ID to `AuthInfo`.
+///
+/// Failures to load individual plugins are logged as warnings rather than errors.
 async fn load_plugin_auth_store(config: &kfcode_config::Config) -> HashMap<String, AuthInfo> {
     let loader = match PluginLoader::new() {
         Ok(loader) => loader,
@@ -1830,6 +1895,7 @@ async fn load_plugin_auth_store(config: &kfcode_config::Config) -> HashMap<Strin
     auth_store
 }
 
+/// Prints the interactive-mode help text to stdout.
 fn show_help() {
     println!();
     println!("Available commands:");
@@ -1850,6 +1916,7 @@ fn show_help() {
     println!();
 }
 
+/// Starts the HTTP server in `mode` (`"serve"`, `"web"`, or `"acp"`) and blocks until it exits.
 async fn run_server_command(
     mode: &str,
     port: u16,
@@ -1876,6 +1943,7 @@ async fn run_server_command(
     Ok(())
 }
 
+/// Attempts to open `url` in the system default browser using platform-specific commands.
 fn try_open_browser(url: &str) {
     let mut candidates: Vec<Vec<String>> = Vec::new();
     if cfg!(target_os = "macos") {
@@ -1909,6 +1977,7 @@ fn try_open_browser(url: &str) {
     );
 }
 
+/// Starts the web server and opens the browser to the local URL.
 async fn run_web_command(
     port: u16,
     hostname: String,
@@ -1928,6 +1997,7 @@ async fn run_web_command(
     run_server_command("web", bind_port, hostname, mdns, mdns_domain, cors).await
 }
 
+/// Runs the ACP command: tries an external bridge first, falls back to HTTP server mode.
 async fn run_acp_command(
     port: u16,
     hostname: String,
@@ -1949,10 +2019,12 @@ async fn run_acp_command(
     run_server_command("acp", port, hostname, mdns, mdns_domain, cors).await
 }
 
+/// Returns `true` for loopback addresses (`127.0.0.1`, `localhost`, `::1`).
 fn is_loopback_host(host: &str) -> bool {
     matches!(host, "127.0.0.1" | "localhost" | "::1")
 }
 
+/// Derives a short mDNS service name from the configured domain and port.
 fn service_name_from_mdns_domain(domain: &str, port: u16) -> String {
     let trimmed = domain
         .trim()
@@ -1965,6 +2037,7 @@ fn service_name_from_mdns_domain(domain: &str, port: u16) -> String {
     }
 }
 
+/// Owns a running mDNS publisher child process and kills it on drop.
 struct MdnsPublisher {
     child: Child,
 }
@@ -1976,6 +2049,7 @@ impl Drop for MdnsPublisher {
     }
 }
 
+/// Spawns an mDNS publisher subprocess and returns a handle that kills it on drop.
 fn spawn_mdns_command(command: &str, args: &[String]) -> io::Result<MdnsPublisher> {
     let mut child = ProcessCommand::new(command)
         .args(args)
@@ -1994,6 +2068,7 @@ fn spawn_mdns_command(command: &str, args: &[String]) -> io::Result<MdnsPublishe
     Ok(MdnsPublisher { child })
 }
 
+/// Starts an mDNS publisher for the given host/port if `enabled` is true and the host is not loopback.
 fn start_mdns_publisher_if_needed(
     enabled: bool,
     bind_host: &str,
@@ -2074,6 +2149,7 @@ fn start_mdns_publisher_if_needed(
     None
 }
 
+/// Builds the CLI argument list for the ACP subcommand including network and mDNS flags.
 fn build_acp_network_args(
     port: u16,
     hostname: &str,
@@ -2106,6 +2182,7 @@ fn build_acp_network_args(
     args
 }
 
+/// Searches common relative paths for a local TypeScript kfcode package directory.
 fn find_local_ts_kfcode_package_dir() -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
@@ -2135,6 +2212,8 @@ fn find_local_ts_kfcode_package_dir() -> Option<PathBuf> {
     None
 }
 
+/// Runs `program args` as an ACP bridge candidate; returns `Ok(true)` on success,
+/// `Ok(false)` when the binary is not found, or an error on non-zero exit.
 fn run_acp_bridge_candidate(
     program: &str,
     args: &[String],
@@ -2170,6 +2249,8 @@ fn run_acp_bridge_candidate(
     Ok(true)
 }
 
+/// Tries to delegate the ACP command to an external bridge binary (env override, PATH `kfcode`, or bun).
+/// Returns `Ok(true)` if a bridge handled the request, `Ok(false)` to fall back to HTTP server mode.
 fn try_run_external_acp_bridge(
     port: u16,
     hostname: &str,
@@ -2227,6 +2308,7 @@ fn try_run_external_acp_bridge(
     Ok(false)
 }
 
+/// Truncates `input` to at most `max_chars` Unicode scalar values, appending `..` when cut.
 fn truncate_text(input: &str, max_chars: usize) -> String {
     if input.chars().count() <= max_chars {
         return input.to_string();
@@ -2239,6 +2321,7 @@ fn truncate_text(input: &str, max_chars: usize) -> String {
     out
 }
 
+/// Returns the platform-specific path to the local kfcode SQLite database file.
 fn local_database_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -2246,6 +2329,7 @@ fn local_database_path() -> PathBuf {
         .join("kfcode.db")
 }
 
+/// Handles the `db` subcommand: prints the DB path, runs a query, or opens an interactive shell.
 async fn handle_db_command(
     action: Option<DbCommands>,
     query: Option<String>,
@@ -2286,6 +2370,7 @@ async fn handle_db_command(
     Ok(())
 }
 
+/// Aggregates token usage and cost statistics across sessions and prints a summary.
 async fn handle_stats_command(
     days: Option<i64>,
     tools_limit: Option<usize>,
@@ -2398,6 +2483,7 @@ async fn handle_stats_command(
     Ok(())
 }
 
+/// Checks out a GitHub PR branch locally using `gh pr checkout`.
 async fn handle_pr_command(number: u32) -> anyhow::Result<()> {
     let branch = format!("pr/{}", number);
     let status = ProcessCommand::new("gh")
@@ -2421,6 +2507,7 @@ async fn handle_pr_command(number: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Identifies the package manager or installer used to install kfcode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InstallMethod {
     Curl,
@@ -2461,6 +2548,7 @@ impl InstallMethod {
     }
 }
 
+/// Runs `program args` and returns its stdout as a `String`, or `None` on failure.
 fn command_text(program: &str, args: &[&str]) -> Option<String> {
     let output = ProcessCommand::new(program).args(args).output().ok()?;
     if !output.status.success() {
@@ -2469,6 +2557,7 @@ fn command_text(program: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Detects the install method by inspecting the executable path and querying package managers.
 fn detect_install_method() -> InstallMethod {
     let exec_path = std::env::current_exe()
         .ok()
@@ -2528,6 +2617,7 @@ fn detect_install_method() -> InstallMethod {
     InstallMethod::Unknown
 }
 
+/// Fetches the latest published version string for the given install method.
 async fn latest_version(method: InstallMethod) -> anyhow::Result<String> {
     let client = reqwest::Client::new();
 
@@ -2587,6 +2677,7 @@ async fn latest_version(method: InstallMethod) -> anyhow::Result<String> {
     }
 }
 
+/// Invokes the appropriate package manager to upgrade kfcode to `target` version.
 fn run_upgrade_process(method: InstallMethod, target: &str) -> anyhow::Result<()> {
     let status = match method {
         InstallMethod::Curl => ProcessCommand::new("sh")
@@ -2624,6 +2715,7 @@ fn run_upgrade_process(method: InstallMethod, target: &str) -> anyhow::Result<()
     Ok(())
 }
 
+/// Prompts the user with `question [y/N]:` and returns `true` if they answer yes.
 fn prompt_yes_no(question: &str) -> anyhow::Result<bool> {
     print!("{} [y/N]: ", question);
     io::stdout().flush()?;
@@ -2635,6 +2727,8 @@ fn prompt_yes_no(question: &str) -> anyhow::Result<bool> {
     ))
 }
 
+/// Handles the `upgrade` subcommand: detects the install method, fetches the latest version,
+/// and runs the appropriate upgrade command.
 async fn handle_upgrade_command(
     target: Option<String>,
     method: Option<String>,
@@ -2672,6 +2766,7 @@ async fn handle_upgrade_command(
     Ok(())
 }
 
+/// Handles the `uninstall` subcommand: removes kfcode data, cache, config, and state directories.
 async fn handle_uninstall_command(
     keep_config: bool,
     keep_data: bool,
@@ -2719,6 +2814,7 @@ async fn handle_uninstall_command(
     Ok(())
 }
 
+/// Generates and prints an OpenAPI 3.1 specification for the kfcode HTTP server.
 async fn handle_generate_command() -> anyhow::Result<()> {
     let mut paths: HashMap<String, serde_json::Map<String, serde_json::Value>> = HashMap::new();
     let operations: &[(&str, &str, &str)] = &[
@@ -2864,6 +2960,7 @@ async fn handle_generate_command() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Lists available models from all configured providers, optionally filtered by provider name.
 async fn list_models(
     provider_filter: Option<String>,
     refresh: bool,
@@ -2946,6 +3043,7 @@ async fn list_models(
     Ok(())
 }
 
+/// Formats a token count as a human-readable string with K/M suffix.
 fn format_tokens(n: u64) -> String {
     if n >= 1_000_000 {
         format!("{:.1}M", n as f64 / 1_000_000.0)
@@ -2956,6 +3054,7 @@ fn format_tokens(n: u64) -> String {
     }
 }
 
+/// Handles the `session` subcommand: list, show, or delete sessions.
 async fn handle_session_command(action: SessionCommands) -> anyhow::Result<()> {
     let db = Database::new()
         .await
@@ -3052,6 +3151,7 @@ async fn handle_session_command(action: SessionCommands) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Prints the resolved configuration for the current working directory.
 async fn show_config() -> anyhow::Result<()> {
     let current_dir = std::env::current_dir()?;
     let config = load_config(&current_dir)?;
@@ -3108,6 +3208,7 @@ async fn show_config() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Static table mapping provider IDs to their primary environment variable names.
 const AUTH_ENV_PROVIDERS: &[(&str, &str)] = &[
     ("anthropic", "ANTHROPIC_API_KEY"),
     ("openai", "OPENAI_API_KEY"),
@@ -3129,6 +3230,7 @@ const AUTH_ENV_PROVIDERS: &[(&str, &str)] = &[
     ("github-copilot", "GITHUB_COPILOT_TOKEN"),
 ];
 
+/// Returns the environment variable name for `provider`, or `None` if unknown.
 fn provider_env_var(provider: &str) -> Option<&'static str> {
     let normalized = provider.trim().to_lowercase();
     AUTH_ENV_PROVIDERS
@@ -3136,6 +3238,7 @@ fn provider_env_var(provider: &str) -> Option<&'static str> {
         .find_map(|(name, env)| (*name == normalized).then_some(*env))
 }
 
+/// Handles the `auth` subcommand: list providers, set a token, or clear a token.
 async fn handle_auth_command(action: AuthCommands) -> anyhow::Result<()> {
     match action {
         AuthCommands::List => {
@@ -3231,6 +3334,7 @@ async fn handle_auth_command(action: AuthCommands) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Handles the `agent` subcommand: list agents or create a new agent markdown file.
 async fn handle_agent_command(action: AgentCommands) -> anyhow::Result<()> {
     match action {
         AgentCommands::List => {
@@ -3304,6 +3408,7 @@ async fn handle_agent_command(action: AgentCommands) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Resolves a `file://` URI or relative/absolute path string to an absolute `PathBuf`.
 fn resolve_document_input_to_path(input: &str) -> anyhow::Result<PathBuf> {
     if input.starts_with("file://") {
         let url = url::Url::parse(input)?;
@@ -3318,6 +3423,7 @@ fn resolve_document_input_to_path(input: &str) -> anyhow::Result<PathBuf> {
     Ok(std::env::current_dir()?.join(path))
 }
 
+/// Selects the best LSP server from config for the given file extension hint.
 fn select_lsp_server(
     config: &kfcode_config::Config,
     file_hint: Option<&Path>,
@@ -3366,6 +3472,7 @@ fn select_lsp_server(
         .ok_or_else(|| anyhow::anyhow!("No enabled LSP server with an executable command found."))
 }
 
+/// Starts an LSP client for the server best matching `file_hint`'s extension.
 async fn create_lsp_client(file_hint: Option<&Path>) -> anyhow::Result<LspClient> {
     let cwd = std::env::current_dir()?;
     let config = load_config(&cwd)?;
@@ -3390,6 +3497,7 @@ async fn create_lsp_client(file_hint: Option<&Path>) -> anyhow::Result<LspClient
     .map_err(|e| anyhow::anyhow!(e.to_string()))
 }
 
+/// Handles the `debug` subcommand and all its nested sub-actions.
 async fn handle_debug_command(action: DebugCommands) -> anyhow::Result<()> {
     match action {
         DebugCommands::Paths => {
@@ -3657,6 +3765,7 @@ async fn handle_debug_command(action: DebugCommands) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Runtime status of a single MCP server as reported by the kfcode HTTP API.
 #[derive(Debug, Serialize, Deserialize)]
 struct McpStatusEntry {
     name: String,
@@ -3666,6 +3775,7 @@ struct McpStatusEntry {
     error: Option<String>,
 }
 
+/// Response from the MCP OAuth start endpoint containing the authorization URL.
 #[derive(Debug, Deserialize)]
 struct McpAuthStartResponse {
     authorization_url: String,
@@ -3673,6 +3783,7 @@ struct McpAuthStartResponse {
     status: String,
 }
 
+/// Joins `base` and `path`, normalizing slashes so there is exactly one separator.
 fn server_url(base: &str, path: &str) -> String {
     format!(
         "{}/{}",
@@ -3681,6 +3792,7 @@ fn server_url(base: &str, path: &str) -> String {
     )
 }
 
+/// Deserializes a successful HTTP response body as `T`, or returns an error with the status and body.
 async fn parse_http_json<T: for<'de> Deserialize<'de>>(
     response: reqwest::Response,
 ) -> anyhow::Result<T> {
@@ -3692,6 +3804,7 @@ async fn parse_http_json<T: for<'de> Deserialize<'de>>(
     Ok(serde_json::from_str(&body)?)
 }
 
+/// Handles the `mcp` subcommand: list, add, connect, disconnect, auth, logout, or debug MCP servers.
 async fn handle_mcp_command(server: String, action: McpCommands) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
 
@@ -3850,12 +3963,14 @@ async fn handle_mcp_command(server: String, action: McpCommands) -> anyhow::Resu
     Ok(())
 }
 
+/// A single session and its messages, used as the unit of export/import.
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionExportEntry {
     info: Session,
     messages: Vec<SessionMessage>,
 }
 
+/// Top-level export file containing a version tag, export timestamp, and one or more sessions.
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionExportFile {
     version: String,
@@ -3863,6 +3978,7 @@ struct SessionExportFile {
     sessions: Vec<SessionExportEntry>,
 }
 
+/// Untagged union covering all supported import payload shapes (wrapped file, single entry, legacy).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 enum SessionImportPayload {
@@ -3874,6 +3990,7 @@ enum SessionImportPayload {
     },
 }
 
+/// Legacy export format where message parts were stored separately from the message info.
 #[derive(Debug, Serialize, Deserialize)]
 struct LegacyMessageExport {
     info: SessionMessage,
@@ -3881,6 +3998,7 @@ struct LegacyMessageExport {
     parts: Vec<MessagePart>,
 }
 
+/// Exports the most recent (or specified) session to JSON, writing to a file or stdout.
 async fn export_session_data(
     session_id: Option<String>,
     output: Option<PathBuf>,

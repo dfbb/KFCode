@@ -1,3 +1,5 @@
+//! Stateful agent executor that drives the provider/tool agentic loop, including subsession management.
+
 use futures::stream::BoxStream;
 use futures::StreamExt;
 use std::collections::{HashMap, HashSet};
@@ -9,24 +11,32 @@ use kfcode_plugin::{HookContext, HookEvent};
 use kfcode_provider::{ChatRequest, Provider, ProviderRegistry, StreamEvent};
 use kfcode_tool::{ToolContext, ToolError, ToolRegistry};
 
+/// Errors that can occur during agent execution.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
+    /// The provider returned an error or the stream failed.
     #[error("Provider error: {0}")]
     ProviderError(String),
 
+    /// A tool invocation returned an error.
     #[error("Tool error: {0}")]
     ToolError(String),
 
+    /// The executor reached the configured step limit without producing a final response.
     #[error("Max steps exceeded")]
     MaxStepsExceeded,
 
+    /// No provider is registered or the requested provider was not found.
     #[error("No provider available")]
     NoProvider,
 
+    /// The provider returned a response that could not be interpreted.
     #[error("Invalid response")]
     InvalidResponse,
 }
 
+/// Drives the agentic loop for a single agent: sends messages to the provider, executes tool calls,
+/// and manages subsession state for spawned subagents.
 pub struct AgentExecutor {
     agent: AgentInfo,
     conversation: Conversation,
@@ -44,15 +54,20 @@ struct SubsessionState {
     disabled_tools: HashSet<String>,
 }
 
+/// Serializable snapshot of a subsession, used to persist and restore subagent state across sessions.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PersistedSubsessionState {
+    /// The agent configuration for this subsession.
     pub agent: AgentInfo,
+    /// The conversation history accumulated in this subsession.
     pub conversation: Conversation,
     #[serde(default)]
+    /// Tool names that are disabled for this subsession.
     pub disabled_tools: Vec<String>,
 }
 
 impl AgentExecutor {
+    /// Creates a new executor for `agent` using the given provider and tool registries.
     pub fn new(
         agent: AgentInfo,
         providers: Arc<ProviderRegistry>,
@@ -72,11 +87,13 @@ impl AgentExecutor {
         }
     }
 
+    /// Replaces the conversation with one pre-seeded with the given system prompt.
     pub fn with_system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.conversation = Conversation::with_system_prompt(prompt);
         self
     }
 
+    /// Marks the given tools as disabled so the executor will reject calls to them.
     pub fn with_disabled_tools<I>(mut self, tools: I) -> Self
     where
         I: IntoIterator<Item = String>,
@@ -85,6 +102,7 @@ impl AgentExecutor {
         self
     }
 
+    /// Restores previously persisted subsession states into this executor.
     pub fn with_persisted_subsessions(
         mut self,
         states: HashMap<String, PersistedSubsessionState>,
@@ -106,14 +124,17 @@ impl AgentExecutor {
         self
     }
 
+    /// Returns a shared reference to the current conversation.
     pub fn conversation(&self) -> &Conversation {
         &self.conversation
     }
 
+    /// Returns a mutable reference to the current conversation.
     pub fn conversation_mut(&mut self) -> &mut Conversation {
         &mut self.conversation
     }
 
+    /// Exports all active subsession states as serializable snapshots.
     pub async fn export_subsessions(&self) -> HashMap<String, PersistedSubsessionState> {
         self.subsessions
             .lock()
@@ -132,6 +153,12 @@ impl AgentExecutor {
             .collect()
     }
 
+    /// Runs the agentic loop for `user_message`, executing tool calls until the model produces
+    /// a final text response or the step limit is reached.
+    ///
+    /// # Errors
+    /// Returns `AgentError::MaxStepsExceeded` if the loop runs out of steps.
+    /// Returns `AgentError::NoProvider` if no provider is available.
     pub async fn execute(&mut self, user_message: impl Into<String>) -> Result<String, AgentError> {
         self.conversation.add_user_message(user_message);
 
@@ -263,6 +290,13 @@ impl AgentExecutor {
         Ok(final_response)
     }
 
+    /// Starts a streaming response for `user_message`, returning a boxed stream of provider events.
+    ///
+    /// Unlike `execute`, this method does not run the full tool-call loop; it returns the raw
+    /// provider stream after a single request.
+    ///
+    /// # Errors
+    /// Returns `AgentError::NoProvider` if no provider is available.
     pub async fn execute_streaming(
         &mut self,
         user_message: String,

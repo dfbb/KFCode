@@ -1,3 +1,4 @@
+//! MCP server registry with OAuth lifecycle management for remote servers and stdio lifecycle for local servers.
 use chrono::Utc;
 use kfcode_mcp::client::{McpClientRegistry, McpServerConfig as McpClientConfig};
 use serde::{Deserialize, Serialize};
@@ -5,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Configuration for a locally-spawned MCP server process.
 #[derive(Debug, Clone)]
 pub struct LocalMcpConfig {
     pub command: String,
@@ -13,6 +15,7 @@ pub struct LocalMcpConfig {
     pub timeout: Option<u64>,
 }
 
+/// Configuration for a remote MCP server accessed over HTTP, optionally protected by OAuth.
 #[derive(Debug, Clone)]
 pub struct RemoteMcpConfig {
     pub url: String,
@@ -21,9 +24,12 @@ pub struct RemoteMcpConfig {
     pub authorization_url: Option<String>,
 }
 
+/// Runtime configuration for an MCP server, discriminating between local process and remote HTTP variants.
 #[derive(Debug, Clone)]
 pub enum McpRuntimeConfig {
+    /// A locally-spawned stdio MCP server.
     Local(LocalMcpConfig),
+    /// A remote HTTP MCP server, optionally requiring OAuth.
     Remote(RemoteMcpConfig),
 }
 
@@ -39,6 +45,7 @@ impl McpRuntimeConfig {
     }
 }
 
+/// Snapshot of an in-progress or completed OAuth flow for a remote MCP server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpOAuthState {
     pub server_name: String,
@@ -47,14 +54,19 @@ pub struct McpOAuthState {
     pub status: McpOAuthStatus,
 }
 
+/// Current OAuth authorization state for a remote MCP server.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum McpOAuthStatus {
+    /// Authorization has been initiated but not yet completed.
     Pending,
+    /// The server has been successfully authorized.
     Authorized,
+    /// Authorization failed or was rejected.
     Failed,
 }
 
+/// Public status snapshot for an MCP server, returned by list and connect endpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerInfo {
     pub name: String,
@@ -66,6 +78,7 @@ pub struct McpServerInfo {
     pub oauth_status: Option<McpOAuthStatus>,
 }
 
+/// A single timestamped log entry emitted by an MCP server lifecycle event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerLogEntry {
     pub timestamp: String,
@@ -79,6 +92,7 @@ struct ManagedServer {
     enabled: bool,
 }
 
+/// Central manager for MCP server registration, connection lifecycle, OAuth flows, and log collection.
 pub struct McpOAuthManager {
     oauth_states: Arc<RwLock<HashMap<String, McpOAuthState>>>,
     servers: Arc<RwLock<HashMap<String, ManagedServer>>>,
@@ -88,6 +102,7 @@ pub struct McpOAuthManager {
 }
 
 impl McpOAuthManager {
+    /// Creates a new manager with empty server, status, log, and OAuth state maps.
     pub fn new() -> Self {
         Self {
             oauth_states: Arc::new(RwLock::new(HashMap::new())),
@@ -117,10 +132,12 @@ impl McpOAuthManager {
             .push(entry);
     }
 
+    /// Returns `true` if a server with the given name has been registered.
     pub async fn has_server(&self, server_name: &str) -> bool {
         self.servers.read().await.contains_key(server_name)
     }
 
+    /// Registers a server with the given name, config, and enabled flag, returning its initial status.
     pub async fn add_server(
         &self,
         server_name: String,
@@ -149,6 +166,7 @@ impl McpOAuthManager {
         status
     }
 
+    /// Attempts to connect the named server, spawning a local client or checking OAuth for remote servers.
     pub async fn connect(&self, server_name: &str) -> Result<McpServerInfo, McpOAuthError> {
         self.log_event(server_name, "info", "Connect requested")
             .await;
@@ -279,6 +297,7 @@ impl McpOAuthManager {
         Ok(info)
     }
 
+    /// Disconnects the named server, removing its local client if applicable.
     pub async fn disconnect(&self, server_name: &str) -> Result<McpServerInfo, McpOAuthError> {
         self.log_event(server_name, "info", "Disconnect requested")
             .await;
@@ -307,6 +326,11 @@ impl McpOAuthManager {
         Ok(info)
     }
 
+    /// Initiates an OAuth authorization flow for the named remote server, returning the pending state.
+    ///
+    /// # Errors
+    /// Returns `McpOAuthError::OAuthNotSupported` if the server is local or OAuth is disabled.
+    /// Returns `McpOAuthError::OAuthInProgress` if a pending flow already exists.
     pub async fn start_oauth(&self, server_name: &str) -> Result<McpOAuthState, McpOAuthError> {
         let managed = self.managed_server(server_name).await?;
         let remote = match managed.config {
@@ -371,6 +395,7 @@ impl McpOAuthManager {
         Ok(state)
     }
 
+    /// Marks the OAuth flow as authorized using the provided callback code, then reconnects the server.
     pub async fn handle_callback(
         &self,
         server_name: &str,
@@ -390,6 +415,7 @@ impl McpOAuthManager {
         self.connect(server_name).await
     }
 
+    /// Authenticates the named server, starting an OAuth flow if not yet authorized, then connects.
     pub async fn authenticate(&self, server_name: &str) -> Result<McpServerInfo, McpOAuthError> {
         let managed = self.managed_server(server_name).await?;
         if !managed.config.oauth_required() {
@@ -407,6 +433,7 @@ impl McpOAuthManager {
         self.connect(server_name).await
     }
 
+    /// Returns the current status snapshot for the named server, or `None` if it is not registered.
     pub async fn get_server(&self, server_name: &str) -> Option<McpServerInfo> {
         if let Some(status) = self.statuses.read().await.get(server_name) {
             return Some(status.clone());
@@ -423,6 +450,7 @@ impl McpOAuthManager {
         )
     }
 
+    /// Returns status snapshots for all registered servers.
     pub async fn list_servers(&self) -> Vec<McpServerInfo> {
         let servers = self.servers.read().await.clone();
         let statuses = self.statuses.read().await.clone();
@@ -441,6 +469,7 @@ impl McpOAuthManager {
         out
     }
 
+    /// Returns all log entries recorded for the named server.
     pub async fn get_logs(
         &self,
         server_name: &str,
@@ -455,6 +484,7 @@ impl McpOAuthManager {
             .unwrap_or_default())
     }
 
+    /// Disconnects then reconnects the named server.
     pub async fn restart(&self, server_name: &str) -> Result<McpServerInfo, McpOAuthError> {
         self.managed_server(server_name).await?;
         self.log_event(server_name, "info", "Restart requested")
@@ -463,6 +493,8 @@ impl McpOAuthManager {
         self.connect(server_name).await
     }
 
+    /// Removes the stored OAuth state for the named server and resets its status to `needs_auth` or `disabled`.
+    /// Returns `true` if an OAuth state entry was present and removed.
     pub async fn remove_oauth(&self, server_name: &str) -> bool {
         let removed = self
             .oauth_states
@@ -558,20 +590,26 @@ impl Default for McpOAuthManager {
     }
 }
 
+/// Errors that can occur during MCP server management or OAuth flows.
 #[derive(Debug, thiserror::Error)]
 pub enum McpOAuthError {
+    /// No server with the given name has been registered.
     #[error("MCP server not found: {0}")]
     ServerNotFound(String),
 
+    /// The server does not support OAuth (e.g., it is a local server).
     #[error("MCP server does not support OAuth: {0}")]
     OAuthNotSupported(String),
 
+    /// An OAuth flow is already in progress for this server.
     #[error("OAuth already in progress")]
     OAuthInProgress,
 
+    /// The OAuth flow failed with the given message.
     #[error("OAuth failed: {0}")]
     OAuthFailed(String),
 
+    /// A runtime error occurred while managing the MCP client.
     #[error("MCP runtime error: {0}")]
     RuntimeError(String),
 }

@@ -1,3 +1,5 @@
+//! Agent configuration, built-in agent definitions, permission evaluation, and the agent registry.
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -13,6 +15,7 @@ use kfcode_permission::{
     PermissionRuleset,
 };
 
+/// System prompt used when asking a provider to generate a new agent configuration from a description.
 const PROMPT_GENERATE: &str = r#"You are an AI agent configuration generator. Given a description of what an agent should do, generate a JSON configuration with:
 - identifier: A unique, lowercase, single-word identifier for the agent (use underscores if needed)
 - whenToUse: A brief description of when this agent should be used
@@ -20,25 +23,37 @@ const PROMPT_GENERATE: &str = r#"You are an AI agent configuration generator. Gi
 
 The identifier should be descriptive but concise. The system prompt should be detailed enough to guide the agent's behavior."#;
 
+/// The structured output produced when generating a new agent configuration via the provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneratedAgentConfig {
+    /// Unique lowercase identifier for the generated agent.
     pub identifier: String,
+    /// Human-readable description of when this agent should be used.
     pub when_to_use: String,
+    /// The system prompt that will guide the generated agent's behavior.
     pub system_prompt: String,
 }
 
+/// Identifies one of the built-in agents shipped with kfcode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BuiltinAgent {
+    /// Full-capability build agent.
     Build,
+    /// Read-only planning agent.
     Plan,
+    /// Default general-purpose agent.
     General,
+    /// Read-only exploration subagent.
     Explore,
+    /// Context-compaction subagent.
     Compaction,
+    /// Session-title generation subagent.
     Title,
 }
 
 impl BuiltinAgent {
+    /// Returns the canonical lowercase string identifier for this built-in agent.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Build => "build",
@@ -50,6 +65,7 @@ impl BuiltinAgent {
         }
     }
 
+    /// Returns an array of all built-in agent variants.
     pub const fn all() -> [BuiltinAgent; 6] {
         [
             BuiltinAgent::Build,
@@ -62,52 +78,83 @@ impl BuiltinAgent {
     }
 }
 
+/// Runtime configuration for a single agent, including its identity, model, permissions, and limits.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
+    /// Unique name used to look up and invoke this agent.
     pub name: String,
+    /// Optional human-readable description shown in the UI.
     pub description: Option<String>,
+    /// Whether this agent is a primary agent, a subagent, or both.
     pub mode: AgentMode,
+    /// Explicit model override; if absent the registry default is used.
     pub model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Preferred model, stored separately so it survives config reloads.
     pub model_preference: Option<ModelRef>,
+    /// Optional system prompt prepended to every conversation.
     pub system_prompt: Option<String>,
+    /// Sampling temperature passed to the provider (0.0–2.0).
     pub temperature: Option<f32>,
+    /// Nucleus sampling probability passed to the provider.
     pub top_p: Option<f32>,
+    /// Maximum number of output tokens per provider call.
     pub max_tokens: Option<u64>,
+    /// Maximum number of agentic steps before the executor returns an error.
     pub max_steps: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Explicit allowlist of tool names; empty means all tools are eligible.
     pub allowed_tools: Vec<String>,
+    /// Arbitrary key-value options forwarded to provider or tool integrations.
     pub options: HashMap<String, serde_json::Value>,
     #[serde(default, alias = "permission_ruleset")]
+    /// Ordered permission rules evaluated when a tool is about to be called.
     pub permission: PermissionRuleset,
     #[serde(default)]
+    /// When true, this agent is hidden from user-facing listings.
     pub hidden: bool,
     #[serde(default)]
+    /// When true, this agent is a built-in agent shipped with kfcode.
     pub native: bool,
     #[serde(default)]
+    /// Optional UI variant hint (e.g. a display style identifier).
     pub variant: Option<String>,
     #[serde(default)]
+    /// Optional accent color for UI display.
     pub color: Option<String>,
 }
 
+/// Controls which conversation contexts an agent may participate in.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum AgentMode {
     #[default]
+    /// The agent is available as a top-level primary agent.
     Primary,
+    /// The agent is only available as a subagent spawned by another agent.
     Subagent,
+    /// The agent may be used in both primary and subagent contexts.
     All,
 }
 
+/// The outcome of evaluating whether an agent may call a specific tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionDecision {
+    /// The tool call is permitted.
     Allow,
+    /// The tool call requires explicit user approval before proceeding.
     Ask,
+    /// The tool call is forbidden.
     Deny,
 }
 
+/// Stateless helper that evaluates tool permission decisions for an agent.
 pub struct PermissionNext;
 
 impl PermissionNext {
+    /// Evaluates whether `agent` is allowed to call `tool_name`.
+    ///
+    /// Checks the explicit `allowed_tools` allowlist first, then delegates to the
+    /// permission ruleset. Returns `Deny` if the tool is not in the allowlist.
     pub fn evaluate(agent: &AgentInfo, tool_name: &str) -> PermissionDecision {
         if !agent.allowed_tools.is_empty()
             && !agent.allowed_tools.iter().any(|tool| tool == tool_name)
@@ -125,55 +172,81 @@ impl PermissionNext {
     }
 }
 
+/// A reference to a specific model on a specific provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRef {
+    /// The model identifier as understood by the provider (e.g. "gpt-4.1").
     pub model_id: String,
+    /// The provider identifier used to look up the provider in the registry (e.g. "openai").
     pub provider_id: String,
 }
 
+/// The full output of a single agentic generation step, including text, tool calls, and usage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateResult {
+    /// Text content produced by the model in this step.
     pub content: String,
+    /// Tool calls requested by the model in this step.
     pub tool_calls: Vec<ToolCallResult>,
+    /// Token usage reported by the provider, if available.
     pub usage: Option<UsageInfo>,
+    /// Whether the model indicated it has finished generating.
     pub finished: bool,
 }
 
+/// A tool call together with its execution result or error.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCallResult {
+    /// Unique identifier for this tool call.
     pub id: String,
+    /// The name of the tool that was called.
     pub name: String,
+    /// Arguments passed to the tool.
     pub arguments: serde_json::Value,
+    /// The tool's output, if execution succeeded.
     pub result: Option<String>,
+    /// The error message, if execution failed.
     pub error: Option<String>,
 }
 
+/// Token usage statistics returned by the provider for a single request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageInfo {
+    /// Number of tokens in the prompt sent to the provider.
     pub input_tokens: u64,
+    /// Number of tokens in the response generated by the provider.
     pub output_tokens: u64,
+    /// Total tokens consumed (input + output).
     pub total_tokens: u64,
 }
 
+/// Input required to generate a new agent configuration from a natural-language description.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateInput {
+    /// Natural-language description of what the new agent should do.
     pub description: String,
+    /// Model to use for generation; required because no default is assumed.
     pub model: Option<ModelRef>,
 }
 
+/// Errors that can occur when generating an agent configuration via the provider.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
+    /// The provider returned an error during the generation request.
     #[error("Provider error: {0}")]
     ProviderError(#[from] kfcode_provider::ProviderError),
 
+    /// The provider response could not be parsed as a valid agent configuration.
     #[error("Failed to parse generated config: {0}")]
     ParseError(String),
 
+    /// No default model is configured and none was supplied in the input.
     #[error("No default model available")]
     NoDefaultModel,
 }
 
 impl AgentInfo {
+    /// Constructs an `AgentInfo` from the corresponding built-in agent variant.
     pub fn from_builtin(builtin: BuiltinAgent) -> Self {
         match builtin {
             BuiltinAgent::Build => Self::build(),
@@ -185,10 +258,12 @@ impl AgentInfo {
         }
     }
 
+    /// Returns the default agent, which is the general-purpose agent.
     pub fn default_agent() -> Self {
         Self::general()
     }
 
+    /// Creates the built-in "build" agent with full tool permissions.
     pub fn build() -> Self {
         Self {
             name: "build".to_string(),
@@ -213,6 +288,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates the built-in "plan" agent, which disallows all edit tools.
     pub fn plan() -> Self {
         Self {
             name: "plan".to_string(),
@@ -235,6 +311,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates the built-in "general" agent, the default primary agent for most tasks.
     pub fn general() -> Self {
         Self {
             name: "general".to_string(),
@@ -259,6 +336,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates the built-in "explore" subagent, restricted to read-only tools.
     pub fn explore() -> Self {
         Self {
             name: "explore".to_string(),
@@ -286,6 +364,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates the built-in "title" subagent, which generates short session titles.
     pub fn title() -> Self {
         Self {
             name: "title".to_string(),
@@ -312,6 +391,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates the built-in "summary" subagent, which generates conversation summaries.
     pub fn summary() -> Self {
         Self {
             name: "summary".to_string(),
@@ -338,6 +418,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates the built-in "compaction" subagent, which compacts conversation history.
     pub fn compaction() -> Self {
         Self {
             name: "compaction".to_string(),
@@ -364,6 +445,7 @@ impl AgentInfo {
         }
     }
 
+    /// Creates a blank custom agent with the given name and default-allow permissions.
     pub fn custom(name: impl Into<String>) -> Self {
         let name = name.into();
         Self {
@@ -387,6 +469,7 @@ impl AgentInfo {
         }
     }
 
+    /// Sets the model for this agent, updating both `model` and `model_preference`.
     pub fn with_model(
         mut self,
         model_id: impl Into<String>,
@@ -401,50 +484,60 @@ impl AgentInfo {
         self
     }
 
+    /// Overrides the system prompt for this agent.
     pub fn with_system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.system_prompt = Some(prompt.into());
         self
     }
 
+    /// Sets the sampling temperature for this agent.
     pub fn with_temperature(mut self, temp: f32) -> Self {
         self.temperature = Some(temp);
         self
     }
 
+    /// Sets the maximum number of agentic steps for this agent.
     pub fn with_max_steps(mut self, steps: u32) -> Self {
         self.max_steps = Some(steps);
         self
     }
 
+    /// Sets the maximum number of output tokens per provider call.
     pub fn with_max_tokens(mut self, max_tokens: u64) -> Self {
         self.max_tokens = Some(max_tokens);
         self
     }
 
+    /// Replaces the permission ruleset for this agent.
     pub fn with_permission(mut self, permission: PermissionRuleset) -> Self {
         self.permission = permission;
         self
     }
 
+    /// Sets the hidden flag, controlling whether this agent appears in user-facing listings.
     pub fn with_hidden(mut self, hidden: bool) -> Self {
         self.hidden = hidden;
         self
     }
 
+    /// Sets the accent color hint for UI display.
     pub fn with_color(mut self, color: impl Into<String>) -> Self {
         self.color = Some(color.into());
         self
     }
 
+    /// Sets the human-readable description for this agent.
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
+    /// Evaluates whether this agent is permitted to call `tool_name`.
     pub fn tool_permission_decision(&self, tool_name: &str) -> PermissionDecision {
         PermissionNext::evaluate(self, tool_name)
     }
 
+    /// Returns true if this agent is allowed to call `tool_name` without user approval.
     pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
         matches!(
             self.tool_permission_decision(tool_name),
@@ -453,11 +546,13 @@ impl AgentInfo {
     }
 }
 
+/// A registry of all available agents, keyed by name, supporting lookup, listing, and config-driven overrides.
 pub struct AgentRegistry {
     agents: HashMap<String, AgentInfo>,
 }
 
 impl AgentRegistry {
+    /// Creates a registry pre-populated with all built-in agents.
     pub fn new() -> Self {
         let mut agents = HashMap::new();
         for builtin in BuiltinAgent::all() {
@@ -469,12 +564,14 @@ impl AgentRegistry {
         Self { agents }
     }
 
+    /// Creates a registry from a loaded config, applying all agent overrides on top of the built-ins.
     pub fn from_config(config: &LoadedConfig) -> Self {
         let mut registry = Self::new();
         registry.apply_config(config);
         registry
     }
 
+    /// Creates a registry from an optional config; falls back to built-ins if config is absent.
     pub fn from_optional_config(config: Option<&LoadedConfig>) -> Self {
         if let Some(config) = config {
             return Self::from_config(config);
@@ -482,6 +579,7 @@ impl AgentRegistry {
         Self::new()
     }
 
+    /// Creates a registry by loading the project config from `project_dir`; falls back to built-ins on error.
     pub fn from_project_dir(project_dir: impl AsRef<Path>) -> Self {
         match load_config(project_dir) {
             Ok(config) => Self::from_config(&config),
@@ -603,18 +701,22 @@ impl AgentRegistry {
         self.agents.insert(key.to_string(), agent);
     }
 
+    /// Returns the agent with the given name, or `None` if it does not exist.
     pub fn get(&self, name: &str) -> Option<&AgentInfo> {
         self.agents.get(name)
     }
 
+    /// Returns a mutable reference to the agent with the given name, or `None` if it does not exist.
     pub fn get_mut(&mut self, name: &str) -> Option<&mut AgentInfo> {
         self.agents.get_mut(name)
     }
 
+    /// Inserts or replaces an agent in the registry.
     pub fn register(&mut self, agent: AgentInfo) {
         self.agents.insert(agent.name.clone(), agent);
     }
 
+    /// Returns all non-hidden agents, with the "build" agent sorted first.
     pub fn list(&self) -> Vec<&AgentInfo> {
         let mut agents: Vec<&AgentInfo> = self.agents.values().filter(|a| !a.hidden).collect();
         agents.sort_by(|a, b| {
@@ -631,10 +733,12 @@ impl AgentRegistry {
         agents
     }
 
+    /// Returns all agents including hidden ones, in unspecified order.
     pub fn list_all(&self) -> Vec<&AgentInfo> {
         self.agents.values().collect()
     }
 
+    /// Returns all non-hidden primary agents, with the "build" agent sorted first.
     pub fn list_primary(&self) -> Vec<&AgentInfo> {
         let mut agents: Vec<&AgentInfo> = self
             .agents
@@ -655,6 +759,7 @@ impl AgentRegistry {
         agents
     }
 
+    /// Returns all non-hidden subagents, sorted alphabetically by name.
     pub fn list_subagents(&self) -> Vec<&AgentInfo> {
         let mut agents: Vec<&AgentInfo> = self
             .agents
@@ -665,6 +770,10 @@ impl AgentRegistry {
         agents
     }
 
+    /// Returns the default agent, preferring "general"; falls back to any non-hidden primary agent.
+    ///
+    /// # Panics
+    /// Panics if the registry contains no agents at all.
     pub fn default_agent(&self) -> &AgentInfo {
         if let Some(general) = self.get(BuiltinAgent::General.as_str()) {
             return general;
@@ -684,6 +793,11 @@ impl AgentRegistry {
             .expect("Agent registry is empty; expected at least one agent")
     }
 
+    /// Generates a new agent configuration by prompting the provider with a natural-language description.
+    ///
+    /// # Errors
+    /// Returns `AgentError::NoDefaultModel` if no model is provided or the provider is not found.
+    /// Returns `AgentError::ParseError` if the provider response cannot be parsed as JSON.
     pub async fn generate(
         &self,
         input: GenerateInput,

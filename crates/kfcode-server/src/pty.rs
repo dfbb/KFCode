@@ -1,3 +1,4 @@
+//! Pseudo-terminal session management: spawning processes, buffering output, and providing WebSocket subscriptions.
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -9,6 +10,7 @@ use tokio::task::JoinHandle;
 /// Maximum size of the retained output buffer (2 MiB, matching TS).
 const BUFFER_LIMIT: usize = 2 * 1024 * 1024;
 
+/// Public metadata for a PTY session, serialized to JSON for API responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PtySession {
     pub id: String,
@@ -19,14 +21,19 @@ pub struct PtySession {
     pub created_at: i64,
 }
 
+/// Lifecycle state of a PTY session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum PtyStatus {
+    /// The child process is still running.
     Running,
+    /// The child process has exited normally.
     Exited,
+    /// The session encountered an error during spawn or I/O.
     Error,
 }
 
+/// A chunk of output drained from a PTY session's buffer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PtyOutput {
     pub session_id: String,
@@ -48,17 +55,23 @@ struct PtySessionInner {
     reader_handle: JoinHandle<()>,
 }
 
+/// Manages a collection of PTY sessions, each backed by a native pseudo-terminal.
 pub struct PtyManager {
     sessions: Arc<RwLock<HashMap<String, (PtySession, PtySessionInner)>>>,
 }
 
 impl PtyManager {
+    /// Creates a new manager with no active sessions.
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
+    /// Spawns a new PTY session running the given command, returning its metadata.
+    ///
+    /// # Errors
+    /// Returns `PtyError::SpawnFailed` if the PTY or child process cannot be created.
     pub async fn create_session(
         &self,
         command: &str,
@@ -175,10 +188,12 @@ impl PtyManager {
         Ok(session)
     }
 
+    /// Returns the metadata for the session with the given ID, or `None` if it does not exist.
     pub async fn get_session(&self, id: &str) -> Option<PtySession> {
         self.sessions.read().await.get(id).map(|(s, _)| s.clone())
     }
 
+    /// Returns metadata for all active sessions.
     pub async fn list_sessions(&self) -> Vec<PtySession> {
         self.sessions
             .read()
@@ -188,6 +203,7 @@ impl PtyManager {
             .collect()
     }
 
+    /// Updates the stored command or working directory metadata for a session without restarting it.
     pub async fn update_session(
         &self,
         id: &str,
@@ -209,6 +225,7 @@ impl PtyManager {
         }
     }
 
+    /// Kills the child process and removes the session, returning `true` if the session existed.
     pub async fn delete_session(&self, id: &str) -> bool {
         let mut sessions = self.sessions.write().await;
         if let Some((_, inner)) = sessions.remove(id) {
@@ -222,6 +239,7 @@ impl PtyManager {
         }
     }
 
+    /// Resizes the PTY window for the given session to the specified columns and rows.
     pub async fn resize_session(&self, id: &str, cols: u16, rows: u16) -> Result<(), PtyError> {
         let sessions = self.sessions.read().await;
         let (_, inner) = sessions
@@ -243,6 +261,7 @@ impl PtyManager {
         Ok(())
     }
 
+    /// Writes raw bytes into the PTY as keyboard input.
     pub async fn write_to_session(&self, id: &str, data: &[u8]) -> Result<(), PtyError> {
         let data = data.to_vec();
         let writer = {
@@ -266,6 +285,7 @@ impl PtyManager {
         Ok(())
     }
 
+    /// Drains and returns all buffered output accumulated since the last call.
     pub async fn read_from_session(&self, id: &str) -> Result<PtyOutput, PtyError> {
         let sessions = self.sessions.read().await;
         let (_, inner) = sessions
@@ -339,14 +359,18 @@ impl Default for PtyManager {
     }
 }
 
+/// Errors that can occur during PTY session operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PtyError {
+    /// No session with the given ID exists.
     #[error("PTY session not found: {0}")]
     SessionNotFound(String),
 
+    /// The child process or PTY pair could not be created.
     #[error("Failed to spawn process: {0}")]
     SpawnFailed(String),
 
+    /// A read or write operation on the PTY failed.
     #[error("IO error: {0}")]
     IoError(String),
 }

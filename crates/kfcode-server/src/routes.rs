@@ -1,3 +1,4 @@
+//! Axum route definitions and handler functions for all REST and WebSocket endpoints exposed by the server.
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -40,6 +41,7 @@ use kfcode_provider::{
     ModelsRegistry,
 };
 
+/// Builds and returns the complete Axum router with all nested route groups attached.
 pub fn router() -> Router<Arc<ServerState>> {
     Router::new()
         .route("/", get(web_index))
@@ -134,6 +136,7 @@ fn session_routes() -> Router<Arc<ServerState>> {
         .route("/{id}/diff", get(get_session_diff))
 }
 
+/// Query parameters accepted by the `GET /session` list endpoint.
 #[derive(Debug, Deserialize)]
 pub struct ListSessionsQuery {
     pub directory: Option<String>,
@@ -143,6 +146,7 @@ pub struct ListSessionsQuery {
     pub limit: Option<usize>,
 }
 
+/// Serialized representation of a session returned by the session endpoints.
 #[derive(Debug, Serialize)]
 pub struct SessionInfo {
     pub id: String,
@@ -159,6 +163,7 @@ pub struct SessionInfo {
     pub permission: Option<PermissionRulesetInfo>,
 }
 
+/// Timestamps associated with a session's lifecycle, in Unix milliseconds.
 #[derive(Debug, Serialize)]
 pub struct SessionTimeInfo {
     pub created: i64,
@@ -167,6 +172,7 @@ pub struct SessionTimeInfo {
     pub archived: Option<i64>,
 }
 
+/// Aggregated diff statistics for a session (additions, deletions, and file count).
 #[derive(Debug, Serialize)]
 pub struct SessionSummaryInfo {
     pub additions: u64,
@@ -174,11 +180,13 @@ pub struct SessionSummaryInfo {
     pub files: u64,
 }
 
+/// Public share URL for a session.
 #[derive(Debug, Serialize)]
 pub struct SessionShareInfo {
     pub url: String,
 }
 
+/// Revert checkpoint stored on a session, referencing the message and optional snapshot.
 #[derive(Debug, Serialize)]
 pub struct SessionRevertInfo {
     pub message_id: String,
@@ -187,6 +195,7 @@ pub struct SessionRevertInfo {
     pub diff: Option<String>,
 }
 
+/// Allow/deny permission ruleset attached to a session.
 #[derive(Debug, Serialize)]
 pub struct PermissionRulesetInfo {
     pub allow: Vec<String>,
@@ -353,6 +362,7 @@ async fn session_status(
     Ok(Json(status))
 }
 
+/// Combined run and lifecycle status for a session, returned by `GET /session/status`.
 #[derive(Debug, Serialize)]
 pub struct SessionStatusInfo {
     pub status: String,
@@ -366,6 +376,7 @@ pub struct SessionStatusInfo {
     pub next: Option<i64>,
 }
 
+/// Request body for `POST /session`.
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionRequest {
     pub parent_id: Option<String>,
@@ -373,11 +384,13 @@ pub struct CreateSessionRequest {
     pub permission: Option<PermissionRulesetInput>,
 }
 
+/// Query parameters for `POST /session` to override the working directory.
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionQuery {
     pub directory: Option<String>,
 }
 
+/// Deserialized permission ruleset from a create or update request.
 #[derive(Debug, Deserialize)]
 pub struct PermissionRulesetInput {
     pub allow: Option<Vec<String>>,
@@ -449,6 +462,7 @@ async fn get_session_children(
     Ok(Json(children.into_iter().map(session_to_info).collect()))
 }
 
+/// A single to-do item belonging to a session.
 #[derive(Debug, Serialize)]
 pub struct TodoInfo {
     pub id: String,
@@ -484,6 +498,7 @@ async fn get_session_todos(
     Ok(Json(items))
 }
 
+/// Request body for `POST /session/{id}/fork`.
 #[derive(Debug, Deserialize)]
 pub struct ForkSessionRequest {
     pub message_id: Option<String>,
@@ -531,6 +546,7 @@ async fn unshare_session(
     Ok(Json(serde_json::json!({ "unshared": true })))
 }
 
+/// Request body for `POST /session/{id}/archive`.
 #[derive(Debug, Deserialize)]
 pub struct ArchiveSessionRequest {
     pub archive: Option<bool>,
@@ -558,6 +574,7 @@ async fn archive_session(
     Ok(Json(info))
 }
 
+/// Request body for `PATCH /session/{id}/title`.
 #[derive(Debug, Deserialize)]
 pub struct SetTitleRequest {
     pub title: String,
@@ -616,6 +633,7 @@ async fn get_session_summary(
     })))
 }
 
+/// Request body for `PATCH /session/{id}/summary`.
 #[derive(Debug, Deserialize)]
 pub struct SetSummaryRequest {
     pub additions: Option<u64>,
@@ -646,6 +664,7 @@ async fn set_session_summary(
     Ok(Json(info))
 }
 
+/// Request body for `POST /session/{id}/revert`.
 #[derive(Debug, Deserialize)]
 pub struct RevertRequest {
     pub message_id: String,
@@ -706,6 +725,7 @@ async fn start_compaction(
     Ok(Json(info))
 }
 
+/// Request body for `POST /session/{id}/message`.
 #[derive(Debug, Deserialize)]
 pub struct SendMessageRequest {
     pub content: String,
@@ -714,6 +734,7 @@ pub struct SendMessageRequest {
     pub stream: Option<bool>,
 }
 
+/// Serialized representation of a session message returned by message endpoints.
 #[derive(Debug, Serialize)]
 pub struct MessageInfo {
     pub id: String,
@@ -731,6 +752,7 @@ pub struct MessageInfo {
     pub tokens: MessageTokensInfo,
 }
 
+/// Token usage counters for a single message.
 #[derive(Debug, Serialize, Default)]
 pub struct MessageTokensInfo {
     pub input: u64,
@@ -740,6 +762,7 @@ pub struct MessageTokensInfo {
     pub cache_write: u64,
 }
 
+/// Serialized representation of a single message part (text, tool call, tool result, etc.).
 #[derive(Debug, Serialize)]
 pub struct PartInfo {
     pub id: String,
@@ -755,6 +778,7 @@ pub struct PartInfo {
     pub ignored: Option<bool>,
 }
 
+/// File attachment metadata embedded in a message part.
 #[derive(Debug, Serialize)]
 pub struct MessageFileInfo {
     pub url: String,
@@ -762,6 +786,7 @@ pub struct MessageFileInfo {
     pub mime: String,
 }
 
+/// Serialized tool call embedded in a message part.
 #[derive(Debug, Serialize)]
 pub struct ToolCallInfo {
     pub id: String,
@@ -769,6 +794,7 @@ pub struct ToolCallInfo {
     pub input: serde_json::Value,
 }
 
+/// Serialized tool result embedded in a message part.
 #[derive(Debug, Serialize)]
 pub struct ToolResultInfo {
     pub tool_call_id: String,
@@ -1126,6 +1152,7 @@ async fn delete_message(
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
+/// Request body for `POST /session/{id}/message/{msgID}/part`.
 #[derive(Debug, Deserialize)]
 pub struct AddPartRequest {
     #[serde(rename = "type")]
@@ -1251,6 +1278,7 @@ async fn delete_part(
     })))
 }
 
+/// A single SSE event emitted during a streaming chat response.
 #[derive(Debug, Serialize, Clone)]
 pub struct StreamEvent {
     #[serde(rename = "type")]
@@ -1619,6 +1647,7 @@ async fn stream_message(
     Ok(Sse::new(ReceiverStream::new(rx)))
 }
 
+/// Request body for `POST /session/{id}/prompt`.
 #[derive(Debug, Deserialize)]
 pub struct SessionPromptRequest {
     pub message: Option<String>,
@@ -1824,11 +1853,13 @@ async fn abort_session(
     Ok(Json(serde_json::json!({ "aborted": true })))
 }
 
+/// Optional time fields that can be patched on a session.
 #[derive(Debug, Deserialize)]
 pub struct UpdateSessionTimeRequest {
     pub archived: Option<i64>,
 }
 
+/// Request body for `PATCH /session/{id}`.
 #[derive(Debug, Deserialize)]
 pub struct UpdateSessionRequest {
     pub title: Option<String>,
@@ -1930,6 +1961,7 @@ async fn update_part(
     })))
 }
 
+/// Request body for `POST /session/{id}/shell`.
 #[derive(Debug, Deserialize)]
 pub struct ExecuteShellRequest {
     pub command: String,
@@ -1960,6 +1992,7 @@ async fn execute_shell(
     })))
 }
 
+/// A single text part within a `PromptAsyncRequest`.
 #[derive(Debug, Deserialize)]
 pub struct TextPartInput {
     #[serde(rename = "type")]
@@ -1967,6 +2000,7 @@ pub struct TextPartInput {
     pub text: Option<String>,
 }
 
+/// Request body for `POST /session/{id}/prompt_async`.
 #[derive(Debug, Deserialize)]
 pub struct PromptAsyncRequest {
     pub message: Option<String>,
@@ -2020,6 +2054,7 @@ async fn prompt_async(
     })))
 }
 
+/// Request body for `POST /session/{id}/init`.
 #[derive(Debug, Deserialize)]
 pub struct InitSessionRequest {
     pub force: Option<bool>,
@@ -2034,6 +2069,7 @@ async fn init_session(
     ))
 }
 
+/// Request body for `POST /session/{id}/summarize`.
 #[derive(Debug, Deserialize)]
 pub struct SummarizeSessionRequest {
     pub provider_id: Option<String>,
@@ -2055,6 +2091,7 @@ async fn session_unrevert(Path(_id): Path<String>) -> Result<Json<serde_json::Va
     ))
 }
 
+/// Request body for `POST /session/{id}/command`.
 #[derive(Debug, Deserialize)]
 pub struct ExecuteCommandRequest {
     pub command: String,
@@ -2131,6 +2168,7 @@ async fn get_session_diff(
     Ok(Json(diffs))
 }
 
+/// Per-file diff statistics returned by `GET /session/{id}/diff`.
 #[derive(Debug, Serialize)]
 pub struct FileDiffInfo {
     pub path: String,
@@ -2146,6 +2184,7 @@ fn provider_routes() -> Router<Arc<ServerState>> {
         .route("/{id}/oauth/callback", post(oauth_callback))
 }
 
+/// Response body for `GET /provider`, listing all providers and their default models.
 #[derive(Debug, Serialize)]
 pub struct ProviderListResponse {
     pub all: Vec<ProviderInfo>,
@@ -2154,6 +2193,7 @@ pub struct ProviderListResponse {
     pub connected: Vec<String>,
 }
 
+/// Summary of a single provider and its available models.
 #[derive(Debug, Serialize)]
 pub struct ProviderInfo {
     pub id: String,
@@ -2161,6 +2201,7 @@ pub struct ProviderInfo {
     pub models: Vec<ModelInfo>,
 }
 
+/// Metadata for a single model, including its optional reasoning variants.
 #[derive(Debug, Serialize)]
 pub struct ModelInfo {
     pub id: String,
@@ -2307,6 +2348,7 @@ async fn list_providers(State(state): State<Arc<ServerState>>) -> Json<ProviderL
     })
 }
 
+/// Describes a single authentication method offered by a provider, used in `GET /provider/auth`.
 #[derive(Debug, Serialize)]
 pub struct AuthMethodInfo {
     pub name: String,
@@ -2336,11 +2378,13 @@ async fn get_provider_auth(
     Json(result)
 }
 
+/// Request body for `POST /provider/{id}/oauth/authorize`.
 #[derive(Debug, Deserialize)]
 pub struct OAuthAuthorizeRequest {
     pub method: usize,
 }
 
+/// Response body for `POST /provider/{id}/oauth/authorize`.
 #[derive(Debug, Serialize)]
 pub struct OAuthAuthorizeResponse {
     pub url: String,

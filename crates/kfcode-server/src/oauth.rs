@@ -1,3 +1,4 @@
+//! Provider authentication helpers that delegate to plugin auth bridges for OAuth and API-key flows.
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -5,6 +6,7 @@ use kfcode_plugin::subprocess::PluginLoader;
 use kfcode_provider::{AuthError, AuthInfo, AuthManager, AuthMethodType, Authorization};
 use serde::{Deserialize, Serialize};
 
+/// Describes a single authentication method offered by a provider plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthMethodInfo {
     #[serde(rename = "type")]
@@ -12,15 +14,18 @@ pub struct AuthMethodInfo {
     pub label: String,
 }
 
+/// Wraps an `AuthManager` and exposes provider authentication operations backed by plugin bridges.
 pub struct ProviderAuth {
     auth_manager: Arc<AuthManager>,
 }
 
 impl ProviderAuth {
+    /// Creates a new `ProviderAuth` wrapping the given auth manager.
     pub fn new(auth_manager: Arc<AuthManager>) -> Self {
         Self { auth_manager }
     }
 
+    /// Returns all available authentication methods grouped by provider ID.
     pub async fn methods(loader: &PluginLoader) -> HashMap<String, Vec<AuthMethodInfo>> {
         let bridges = loader.auth_bridges().await;
         bridges
@@ -39,6 +44,7 @@ impl ProviderAuth {
             .collect()
     }
 
+    /// Initiates an authorization flow for the given provider and method index, returning the redirect URL and instructions.
     pub async fn authorize(
         loader: &PluginLoader,
         provider_id: &str,
@@ -66,6 +72,7 @@ impl ProviderAuth {
         })
     }
 
+    /// Handles the OAuth callback for the given provider, persisting the resulting credentials to the auth manager.
     pub async fn callback(
         &self,
         loader: &PluginLoader,
@@ -146,12 +153,14 @@ impl ProviderAuth {
         Ok(())
     }
 
+    /// Stores a plain API key for the given provider in the auth manager.
     pub async fn set_api_key(&self, provider_id: &str, key: String) {
         self.auth_manager
             .set(provider_id, AuthInfo::Api { key })
             .await;
     }
 
+    /// Removes all stored credentials for the given provider from the auth manager.
     pub async fn remove(&self, provider_id: &str) {
         self.auth_manager.remove(provider_id).await;
     }

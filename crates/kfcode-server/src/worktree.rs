@@ -1,20 +1,27 @@
+//! Git worktree utilities: listing, creating, removing, and pruning worktrees via the `git` CLI.
 use std::path::Path;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+/// Errors that can occur when interacting with git worktrees.
 #[derive(Debug, thiserror::Error)]
 pub enum WorktreeError {
+    /// The given path is not inside a git repository.
     #[error("Not a git repository")]
     NotGitRepo,
+    /// A git command exited with a non-zero status.
     #[error("Git command failed: {0}")]
     GitError(String),
+    /// The requested worktree path was not found.
     #[error("Worktree not found: {0}")]
     NotFound(String),
+    /// An I/O error occurred while running git.
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
 
+/// Metadata for a single git worktree entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorktreeInfo {
     pub path: String,
@@ -41,6 +48,7 @@ fn is_git_repo(path: &Path) -> bool {
     path.join(".git").exists() || run_git(&["rev-parse", "--git-dir"], path).is_ok()
 }
 
+/// Lists all worktrees for the repository at `repo_path` by parsing `git worktree list --porcelain`.
 pub fn list_worktrees(repo_path: &Path) -> Result<Vec<WorktreeInfo>, WorktreeError> {
     if !is_git_repo(repo_path) {
         return Err(WorktreeError::NotGitRepo);
@@ -96,6 +104,8 @@ pub fn list_worktrees(repo_path: &Path) -> Result<Vec<WorktreeInfo>, WorktreeErr
     Ok(worktrees)
 }
 
+/// Creates a new worktree for `repo_path`, optionally specifying a branch name and target path.
+/// Generates a timestamped branch name and sibling directory path when the arguments are omitted.
 pub fn create_worktree(
     repo_path: &Path,
     branch: Option<&str>,
@@ -171,6 +181,8 @@ pub fn create_worktree(
     })
 }
 
+/// Removes the worktree at `worktree_path` from the repository at `repo_path`.
+/// Pass `force = true` to remove even if the worktree has uncommitted changes.
 pub fn remove_worktree(
     repo_path: &Path,
     worktree_path: &str,
@@ -189,6 +201,7 @@ pub fn remove_worktree(
     Ok(())
 }
 
+/// Runs `git worktree prune` to remove stale worktree administrative files for the repository at `repo_path`.
 pub fn prune_worktrees(repo_path: &Path) -> Result<(), WorktreeError> {
     if !is_git_repo(repo_path) {
         return Err(WorktreeError::NotGitRepo);
