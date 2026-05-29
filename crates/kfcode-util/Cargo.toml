@@ -20,3 +20,10 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 glob = { workspace = true }
 regex = { workspace = true }
+dirs = { workspace = true }
+reqwest = { workspace = true, optional = true }
+
+[features]
+# Enables the GitHub release lookup + cache in `upgrade_check`.
+# Off by default so util's other dependents don't pull in reqwest/TLS.
+upgrade-check = ["dep:reqwest"]

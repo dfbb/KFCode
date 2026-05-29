@@ -81,3 +81,131 @@ mod tests {
         assert!(!is_newer("0.1.2", "garbage"));
     }
 }
+
+use std::path::PathBuf;
+
+/// Cached result of the last upgrade check.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UpgradeCache {
+    /// RFC3339 timestamp of the last network check.
+    pub last_check: String,
+    /// Latest version string seen (e.g. "0.1.2"), without a leading `v`.
+    pub latest_version: String,
+}
+
+/// Path to the cache file: `<cache_dir>/kfcode/upgrade-check.json`.
+pub fn cache_path() -> Option<PathBuf> {
+    dirs::cache_dir().map(|p| p.join("kfcode").join("upgrade-check.json"))
+}
+
+/// Reads the cache, returning `None` if it is missing or unparseable.
+pub fn read_cache() -> Option<UpgradeCache> {
+    let path = cache_path()?;
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// Writes the cache, creating the parent directory if needed. Errors are ignored
+/// by callers (a failed cache write must never break startup).
+pub fn write_cache(cache: &UpgradeCache) -> std::io::Result<()> {
+    let path = cache_path()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no cache dir"))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let text = serde_json::to_string(cache)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    std::fs::write(path, text)
+}
+
+/// Returns true when `last_check` (RFC3339) is more than 24h before now.
+pub fn cache_is_stale(last_check: &str) -> bool {
+    match chrono::DateTime::parse_from_rfc3339(last_check) {
+        Ok(ts) => {
+            let age = chrono::Utc::now().signed_duration_since(ts.with_timezone(&chrono::Utc));
+            age.num_hours() >= 24
+        }
+        Err(_) => true,
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    #[test]
+    fn roundtrips_cache_json() {
+        let cache = UpgradeCache {
+            last_check: "2026-05-29T08:00:00Z".to_string(),
+            latest_version: "0.1.2".to_string(),
+        };
+        let text = serde_json::to_string(&cache).unwrap();
+        let back: UpgradeCache = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.latest_version, "0.1.2");
+        assert_eq!(back.last_check, "2026-05-29T08:00:00Z");
+    }
+
+    #[test]
+    fn staleness_thresholds() {
+        let now = chrono::Utc::now().to_rfc3339();
+        assert!(!cache_is_stale(&now)); // 刚检查过,不过期
+        let old = (chrono::Utc::now() - chrono::Duration::hours(25)).to_rfc3339();
+        assert!(cache_is_stale(&old)); // 超过 24h,过期
+        assert!(cache_is_stale("not-a-timestamp")); // 解析失败视为过期
+    }
+}
+
+/// GitHub owner/repo that publishes KFCode releases.
+pub const RELEASE_REPO: &str = "dfbb/KFCode";
+
+/// Fetches the latest **stable** release version (no leading `v`) from GitHub.
+///
+/// Uses `/releases/latest`, which excludes prereleases by design. Available only
+/// when the `upgrade-check` feature is enabled. A 4s timeout keeps callers from
+/// hanging; any network/parse failure surfaces as `Err` (callers ignore it for
+/// the silent startup check, or report it for the explicit `upgrade` command).
+#[cfg(feature = "upgrade-check")]
+pub async fn fetch_latest_version() -> anyhow::Result<String> {
+    let url = format!("https://api.github.com/repos/{RELEASE_REPO}/releases/latest");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(4))
+        .build()?;
+    let resp = client
+        .get(url)
+        .header("User-Agent", "kfcode-cli")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await?
+        .error_for_status()?;
+    let json: serde_json::Value = resp.json().await?;
+    let tag = json
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("release JSON missing tag_name"))?;
+    Ok(tag.trim_start_matches('v').to_string())
+}
+
+/// Returns the latest version using the cache when fresh (<24h), otherwise
+/// queries GitHub and refreshes the cache. Network/cache-write failures are
+/// non-fatal: on error it falls back to any cached value, else returns `Err`.
+#[cfg(feature = "upgrade-check")]
+pub async fn latest_version_cached() -> anyhow::Result<String> {
+    if let Some(cache) = read_cache() {
+        if !cache_is_stale(&cache.last_check) {
+            return Ok(cache.latest_version);
+        }
+    }
+    match fetch_latest_version().await {
+        Ok(version) => {
+            let _ = write_cache(&UpgradeCache {
+                last_check: chrono::Utc::now().to_rfc3339(),
+                latest_version: version.clone(),
+            });
+            Ok(version)
+        }
+        Err(e) => match read_cache() {
+            Some(cache) => Ok(cache.latest_version),
+            None => Err(e),
+        },
+    }
+}
