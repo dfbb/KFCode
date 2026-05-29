@@ -1,18 +1,55 @@
 #!/usr/bin/env bash
-# 发版入口:校验 -> 更新 workspace 版本号 -> 提交 -> 打 tag -> push。
-# 用法: bash scripts/build/release.sh <version>   例如: bash scripts/build/release.sh 0.1.1
+# 发版入口:校验 -> 计算/更新版本号 -> 提交 -> 打 tag -> push。
+#
+# 用法:
+#   bash scripts/build/release.sh            # 自动递增到下一个版本(推荐)
+#   bash scripts/build/release.sh 0.3.0      # 显式指定版本(覆盖自动递增)
+#
+# 自动递增规则(每位逢 10 进 1,非标准 semver,但符合本项目约定):
+#   首发 0.1.0 -> 0.1.1;之后 patch 每次 +1;patch 到 9 进位:0.1.9 -> 0.2.0;
+#   minor 到 9 再进位:0.9.9 -> 1.0.0。基准取「Cargo.toml 版本」与「最新 git tag」较大者。
 #
 # push tag 后,GitHub Actions(.github/workflows/release.yml)会自动:
 #   编译三平台二进制、打包、创建 GitHub Release、把 formula 推到 dfbb/homebrew-tap。
+#
+# 注:release.yml 的 tag 触发器由 dist 生成、匹配 vX.Y.Z,不要手改
+#     (check-dist.sh 会用 `dist generate --check` 校验,手改会导致 CI 失败)。
 
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# 每位逢 10 进 1 的递增:0.1.9 -> 0.2.0,0.9.9 -> 1.0.0
+bump_version() {
+  local major minor patch
+  IFS='.' read -r major minor patch <<< "$1"
+  patch=$((patch + 1))
+  if (( patch > 9 )); then patch=0; minor=$((minor + 1)); fi
+  if (( minor > 9 )); then minor=0; major=$((major + 1)); fi
+  echo "${major}.${minor}.${patch}"
+}
+
+# 从 Cargo.toml 的 [workspace.package] 读当前版本
+current_cargo_version() {
+  perl -0ne 'print $1 if /\[workspace\.package\][^\[]*?\nversion = "([^"]+)"/s' Cargo.toml
+}
+
+# 最新的 vX.Y.Z tag(去掉 v 前缀);没有则空
+latest_tag_version() {
+  git tag --list 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null \
+    | sed 's/^v//' \
+    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sort -V | tail -1
+}
+
 VERSION="${1:-}"
 
 if [[ -z "$VERSION" ]]; then
-  echo "用法: bash scripts/build/release.sh <version>   例如 0.1.1" >&2
-  exit 1
+  # 自动递增:基准 = max(Cargo.toml 版本, 最新 tag),再 +1
+  CARGO_V="$(current_cargo_version)"
+  TAG_V="$(latest_tag_version)"
+  BASE="$(printf '%s\n%s\n' "${CARGO_V:-0.0.0}" "${TAG_V:-0.0.0}" | sort -V | tail -1)"
+  VERSION="$(bump_version "$BASE")"
+  echo "==> 自动递增版本:基准 $BASE -> 新版本 $VERSION"
 fi
 
 # 校验版本号格式:X.Y.Z(可带 -prerelease 后缀)

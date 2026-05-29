@@ -126,14 +126,27 @@ curl --proto '=https' --tlsv1.2 -LsSf \
 # 1. Sanity-check config and planned artifacts
 bash scripts/build/check-dist.sh
 
-# 2. Release (example: 0.1.1)
-bash scripts/build/release.sh 0.1.1
+# 2a. Release with auto-incremented version (recommended)
+bash scripts/build/release.sh
+
+# 2b. …or pin an explicit version
+bash scripts/build/release.sh 0.3.0
 ```
 
+With no argument, `release.sh` computes the next version automatically. The first
+release is `0.1.1`; after that the patch digit increments each time, carrying at 10:
+`0.1.9 → 0.2.0`, `0.9.9 → 1.0.0`. The base is the greater of the current
+`[workspace.package].version` and the latest `vX.Y.Z` git tag, so the computed version
+never collides with an existing tag.
+
+> This per-digit carry is **not standard semver** (you will never see `0.10.x`). It is
+> a deliberate project convention. Pass an explicit version to override it.
+
 `release.sh` enforces a clean working tree, validates the version format, refuses an
-existing tag, bumps `[workspace.package].version`, commits, tags `v0.1.1`, and pushes.
-Pushing the tag triggers the workflow, which builds all three platforms, creates the
-GitHub Release, and pushes the updated formula to `dfbb/homebrew-tap`.
+existing tag, bumps `[workspace.package].version`, commits, tags `vX.Y.Z`, and pushes.
+The tag matches the workflow's trigger (`**[0-9]+.[0-9]+.[0-9]+*`, dist-generated — do
+not hand-edit), which builds all three platforms, creates the GitHub Release, and
+pushes the updated formula to `dfbb/homebrew-tap`.
 
 Track progress at <https://github.com/dfbb/KFCode/actions>.
 
