@@ -6,6 +6,7 @@ This documentation set corresponds to the current code state of **KFCode** (vers
 
 - Project overview: `README.md`
 - User guide: `USER_GUIDE.md`
+- Build & release: `docs/BUILD.md`
 - CLI: `docs/kfcode-cli.md`
 - TUI: `docs/kfcode-tui.md`
 - Server: `docs/kfcode-server.md`
