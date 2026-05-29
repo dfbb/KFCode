@@ -34,6 +34,8 @@ use kfcode_tool::skill::list_available_skills;
 use kfcode_tool::{registry::create_default_registry, ToolContext};
 use kfcode_types::{MessagePart, Session, SessionMessage};
 
+mod upgrade;
+
 /// Top-level CLI structure parsed by clap; holds the optional subcommand.
 #[derive(Parser)]
 #[command(name = "kfcode")]
