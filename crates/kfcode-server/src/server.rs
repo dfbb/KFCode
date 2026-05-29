@@ -144,13 +144,21 @@ impl ServerState {
 
     /// Creates state with a SQLite storage backend, using the given server URL for plugin context.
     pub async fn new_with_storage_for_url(server_url: String) -> anyhow::Result<Self> {
+        let db = Database::new().await?;
+        Self::new_with_database(db, server_url).await
+    }
+
+    /// Creates state with an externally-provided database, enabling test isolation via tempdir.
+    pub async fn new_with_database(
+        db: kfcode_storage::Database,
+        server_url: String,
+    ) -> anyhow::Result<Self> {
         let mut state = Self::new();
         let auth_manager = Arc::new(AuthManager::load_from_file(&auth_data_dir()).await);
         state.auth_manager = auth_manager.clone();
         load_plugin_auth_store(&server_url, auth_manager.clone()).await;
         let auth_store = auth_manager.list().await;
 
-        // Load config and convert providers to bootstrap format
         let cwd = std::env::current_dir().unwrap_or_default();
         let bootstrap_config = match load_config(&cwd) {
             Ok(config) => {
@@ -170,12 +178,16 @@ impl ServerState {
         };
 
         state.providers = create_registry_from_bootstrap_config(&bootstrap_config, &auth_store);
-        let db = Database::new().await?;
         let pool = db.pool().clone();
         state.session_repo = Some(SessionRepository::new(pool.clone()));
         state.message_repo = Some(MessageRepository::new(pool));
         state.load_sessions_from_storage().await?;
         Ok(state)
+    }
+
+    /// Returns true if both session and message storage backends are configured.
+    pub fn has_storage(&self) -> bool {
+        self.session_repo.is_some() && self.message_repo.is_some()
     }
 
     /// Broadcasts a JSON event string to all connected SSE subscribers.
