@@ -44,15 +44,26 @@ impl Database {
     /// cannot connect, and `DatabaseError::MigrationError` if any migration statement fails.
     pub async fn new() -> Result<Self, DatabaseError> {
         let db_path = Self::get_database_path()?;
+        Self::open_at(&db_path).await
+    }
 
-        if let Some(parent) = db_path.parent() {
+    /// Opens (or creates) a database at an explicit filesystem path and runs all pending migrations.
+    ///
+    /// Parent directories are created automatically. The pool is configured with up to 5
+    /// connections and `PRAGMA foreign_keys = ON` on every connection.
+    ///
+    /// # Errors
+    /// Returns `DatabaseError::ConnectionError` if the path cannot be created or the pool
+    /// cannot connect, and `DatabaseError::MigrationError` if any migration statement fails.
+    pub async fn open_at(path: &std::path::Path) -> Result<Self, DatabaseError> {
+        if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
         }
 
-        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", path.display());
 
-        info!("Connecting to database at {}", db_path.display());
+        info!("Connecting to database at {}", path.display());
 
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
