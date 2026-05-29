@@ -20,7 +20,7 @@ async fn round_trips_auth_entry() {
         scope: None,
     });
     store.set("server-1", entry).await.expect("set");
-    let got = store.get("server-1").await.expect("must exist");
+    let got = store.get("server-1").await.expect("io error").expect("must exist");
     assert_eq!(got.tokens.unwrap().access_token, "tok");
 }
 
@@ -31,7 +31,7 @@ async fn isolates_independent_stores() {
     let mut e = AuthEntry::default();
     e.server_url = Some("https://a".into());
     a.set("name", e).await.unwrap();
-    assert!(b.get("name").await.is_none(), "stores at distinct paths must not bleed");
+    assert!(b.get("name").await.unwrap().is_none(), "stores at distinct paths must not bleed");
 }
 
 #[tokio::test]
@@ -39,7 +39,7 @@ async fn remove_clears_entry() {
     let (store, _dir) = fresh_store();
     store.set("x", AuthEntry::default()).await.unwrap();
     store.remove("x").await.expect("remove");
-    assert!(store.get("x").await.is_none());
+    assert!(store.get("x").await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -62,7 +62,7 @@ async fn update_tokens_preserves_other_fields() {
         .await
         .expect("update_tokens");
 
-    let got = store.get("x").await.unwrap();
+    let got = store.get("x").await.unwrap().unwrap();
     assert_eq!(got.tokens.unwrap().access_token, "new");
     assert_eq!(got.server_url.as_deref(), Some("https://example"));
 }

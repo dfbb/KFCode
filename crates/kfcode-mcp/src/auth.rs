@@ -6,10 +6,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Mutex;
 
 /// OAuth tokens obtained from the authorization server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OAuthTokens {
     pub access_token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,8 +23,22 @@ pub struct OAuthTokens {
     pub scope: Option<String>,
 }
 
+impl std::fmt::Debug for OAuthTokens {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthTokens")
+            .field("access_token", &"<redacted>")
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field("expires_at", &self.expires_at)
+            .field("scope", &self.scope)
+            .finish()
+    }
+}
+
 /// Dynamically-registered (or pre-configured) client information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OAuthClientInfo {
     pub client_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,8 +49,22 @@ pub struct OAuthClientInfo {
     pub client_secret_expires_at: Option<f64>,
 }
 
+impl std::fmt::Debug for OAuthClientInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthClientInfo")
+            .field("client_id", &self.client_id)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "<redacted>"),
+            )
+            .field("client_id_issued_at", &self.client_id_issued_at)
+            .field("client_secret_expires_at", &self.client_secret_expires_at)
+            .finish()
+    }
+}
+
 /// A single entry in the auth store, keyed by MCP server name.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct AuthEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tokens: Option<OAuthTokens>,
@@ -49,6 +79,24 @@ pub struct AuthEntry {
     pub server_url: Option<String>,
 }
 
+impl std::fmt::Debug for AuthEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthEntry")
+            .field("tokens", &self.tokens)
+            .field("client_info", &self.client_info)
+            .field(
+                "code_verifier",
+                &self.code_verifier.as_ref().map(|_| "<redacted>"),
+            )
+            .field(
+                "oauth_state",
+                &self.oauth_state.as_ref().map(|_| "<redacted>"),
+            )
+            .field("server_url", &self.server_url)
+            .finish()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AuthStore – path-injectable primitive
 // ---------------------------------------------------------------------------
@@ -59,12 +107,18 @@ pub struct AuthEntry {
 #[derive(Debug, Clone)]
 pub struct AuthStore {
     path: PathBuf,
+    /// Serializes all read-modify-write operations to prevent concurrent
+    /// corruption of the credentials file.
+    write_lock: Arc<Mutex<()>>,
 }
 
 impl AuthStore {
     /// Create a store backed by the given file path.
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            write_lock: Arc::new(Mutex::new(())),
+        }
     }
 
     /// Create a store backed by the default user data directory.
@@ -84,20 +138,44 @@ impl AuthStore {
     // Internal IO helpers
     // -----------------------------------------------------------------------
 
-    async fn read_all(&self) -> HashMap<String, AuthEntry> {
+    async fn read_all(&self) -> Result<HashMap<String, AuthEntry>, std::io::Error> {
         match fs::read_to_string(&self.path).await {
-            Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
-            Err(_) => HashMap::new(),
+            Ok(contents) => serde_json::from_str(&contents)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
+            Err(e) => Err(e),
         }
     }
 
     async fn write_all(&self, data: &HashMap<String, AuthEntry>) -> Result<(), std::io::Error> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).await?;
+            // Restrict parent directory to owner-only access.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let perm = std::fs::Permissions::from_mode(0o700);
+                tokio::fs::set_permissions(parent, perm).await.ok();
+            }
         }
         let json = serde_json::to_string_pretty(data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        fs::write(&self.path, json).await
+
+        // Atomic write: write to a .tmp file, set permissions, then rename.
+        let tmp = self.path.with_extension("json.tmp");
+        fs::write(&tmp, &json).await?;
+
+        // Set file permissions before the rename to avoid a brief exposure
+        // window where the file is world-readable.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perm = std::fs::Permissions::from_mode(0o600);
+            tokio::fs::set_permissions(&tmp, perm).await?;
+        }
+
+        fs::rename(&tmp, &self.path).await?;
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -105,23 +183,31 @@ impl AuthStore {
     // -----------------------------------------------------------------------
 
     /// Get the auth entry for a given MCP server name.
-    pub async fn get(&self, mcp_name: &str) -> Option<AuthEntry> {
-        let data = self.read_all().await;
-        data.get(mcp_name).cloned()
+    pub async fn get(&self, mcp_name: &str) -> Result<Option<AuthEntry>, std::io::Error> {
+        let data = self.read_all().await?;
+        Ok(data.get(mcp_name).cloned())
     }
 
     /// Get the auth entry only if it was stored for the same `server_url`.
-    pub async fn get_for_url(&self, mcp_name: &str, server_url: &str) -> Option<AuthEntry> {
-        let entry = self.get(mcp_name).await?;
+    pub async fn get_for_url(
+        &self,
+        mcp_name: &str,
+        server_url: &str,
+    ) -> Result<Option<AuthEntry>, std::io::Error> {
+        let entry = match self.get(mcp_name).await? {
+            Some(e) => e,
+            None => return Ok(None),
+        };
         match &entry.server_url {
-            Some(url) if url == server_url => Some(entry),
-            _ => None,
+            Some(url) if url == server_url => Ok(Some(entry)),
+            _ => Ok(None),
         }
     }
 
     /// Persist an auth entry.
     pub async fn set(&self, mcp_name: &str, entry: AuthEntry) -> Result<(), std::io::Error> {
-        let mut data = self.read_all().await;
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
         data.insert(mcp_name.to_string(), entry);
         self.write_all(&data).await
     }
@@ -142,7 +228,8 @@ impl AuthStore {
 
     /// Remove all stored auth data for a server.
     pub async fn remove(&self, mcp_name: &str) -> Result<(), std::io::Error> {
-        let mut data = self.read_all().await;
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
         data.remove(mcp_name);
         self.write_all(&data).await
     }
@@ -153,9 +240,11 @@ impl AuthStore {
         mcp_name: &str,
         tokens: OAuthTokens,
     ) -> Result<(), std::io::Error> {
-        let mut entry = self.get(mcp_name).await.unwrap_or_default();
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
+        let entry = data.entry(mcp_name.to_string()).or_default();
         entry.tokens = Some(tokens);
-        self.set(mcp_name, entry).await
+        self.write_all(&data).await
     }
 
     /// Update only the client info portion of an entry.
@@ -165,9 +254,14 @@ impl AuthStore {
         info: OAuthClientInfo,
         server_url: Option<&str>,
     ) -> Result<(), std::io::Error> {
-        let mut entry = self.get(mcp_name).await.unwrap_or_default();
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
+        let entry = data.entry(mcp_name.to_string()).or_default();
         entry.client_info = Some(info);
-        self.set_with_url(mcp_name, entry, server_url).await
+        if let Some(url) = server_url {
+            entry.server_url = Some(url.to_string());
+        }
+        self.write_all(&data).await
     }
 
     /// Store the PKCE code verifier.
@@ -176,16 +270,20 @@ impl AuthStore {
         mcp_name: &str,
         code_verifier: &str,
     ) -> Result<(), std::io::Error> {
-        let mut entry = self.get(mcp_name).await.unwrap_or_default();
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
+        let entry = data.entry(mcp_name.to_string()).or_default();
         entry.code_verifier = Some(code_verifier.to_string());
-        self.set(mcp_name, entry).await
+        self.write_all(&data).await
     }
 
     /// Clear the stored code verifier.
     pub async fn clear_code_verifier(&self, mcp_name: &str) -> Result<(), std::io::Error> {
-        if let Some(mut entry) = self.get(mcp_name).await {
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
+        if let Some(entry) = data.get_mut(mcp_name) {
             entry.code_verifier = None;
-            self.set(mcp_name, entry).await?;
+            self.write_all(&data).await?;
         }
         Ok(())
     }
@@ -196,21 +294,25 @@ impl AuthStore {
         mcp_name: &str,
         state: &str,
     ) -> Result<(), std::io::Error> {
-        let mut entry = self.get(mcp_name).await.unwrap_or_default();
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
+        let entry = data.entry(mcp_name.to_string()).or_default();
         entry.oauth_state = Some(state.to_string());
-        self.set(mcp_name, entry).await
+        self.write_all(&data).await
     }
 
     /// Read the stored OAuth state.
     pub async fn get_oauth_state(&self, mcp_name: &str) -> Option<String> {
-        self.get(mcp_name).await.and_then(|e| e.oauth_state)
+        self.get(mcp_name).await.ok().flatten().and_then(|e| e.oauth_state)
     }
 
     /// Clear the stored OAuth state.
     pub async fn clear_oauth_state(&self, mcp_name: &str) -> Result<(), std::io::Error> {
-        if let Some(mut entry) = self.get(mcp_name).await {
+        let _guard = self.write_lock.lock().await;
+        let mut data = self.read_all().await?;
+        if let Some(entry) = data.get_mut(mcp_name) {
             entry.oauth_state = None;
-            self.set(mcp_name, entry).await?;
+            self.write_all(&data).await?;
         }
         Ok(())
     }
@@ -223,7 +325,11 @@ impl AuthStore {
 
 /// Get the auth entry for a given MCP server name.
 pub async fn get(mcp_name: &str) -> Option<AuthEntry> {
-    AuthStore::default_user_store().get(mcp_name).await
+    AuthStore::default_user_store()
+        .get(mcp_name)
+        .await
+        .ok()
+        .flatten()
 }
 
 /// Get the auth entry only if it was stored for the same `server_url`.
@@ -231,6 +337,8 @@ pub async fn get_for_url(mcp_name: &str, server_url: &str) -> Option<AuthEntry> 
     AuthStore::default_user_store()
         .get_for_url(mcp_name, server_url)
         .await
+        .ok()
+        .flatten()
 }
 
 /// Persist an auth entry (optionally updating the server URL).
@@ -256,9 +364,16 @@ pub async fn update_tokens(
     server_url: Option<&str>,
 ) -> Result<(), std::io::Error> {
     let store = AuthStore::default_user_store();
-    let mut entry = store.get(mcp_name).await.unwrap_or_default();
+    // update_tokens handles the lock internally; set_with_url adds the URL.
+    // We need a single atomic RMW, so use the lower-level path.
+    let _guard = store.write_lock.lock().await;
+    let mut data = store.read_all().await?;
+    let entry = data.entry(mcp_name.to_string()).or_default();
     entry.tokens = Some(tokens);
-    store.set_with_url(mcp_name, entry, server_url).await
+    if let Some(url) = server_url {
+        entry.server_url = Some(url.to_string());
+    }
+    store.write_all(&data).await
 }
 
 /// Update only the client info portion of an entry.

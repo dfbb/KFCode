@@ -55,7 +55,7 @@ async fn store_persists_across_reload() {
     }
 
     let store = AuthStore::new(path);
-    let got = store.get("server-1").await.expect("must persist");
+    let got = store.get("server-1").await.expect("io error").expect("must persist");
     assert_eq!(got.tokens.unwrap().access_token, "tok");
     assert_eq!(got.server_url.as_deref(), Some("https://api.example.com"));
 }
@@ -68,9 +68,9 @@ async fn get_for_url_invalidates_on_url_change() {
     e.server_url = Some("https://old".into());
     store.set("name", e).await.unwrap();
 
-    assert!(store.get_for_url("name", "https://old").await.is_some());
+    assert!(store.get_for_url("name", "https://old").await.unwrap().is_some());
     assert!(
-        store.get_for_url("name", "https://new").await.is_none(),
+        store.get_for_url("name", "https://new").await.unwrap().is_none(),
         "URL change must invalidate"
     );
 }
