@@ -1,20 +1,26 @@
+//! Color palette helpers for message block backgrounds and borders.
+
 use ratatui::style::Color;
 
 use crate::theme::Theme;
 
+/// Background color for user message blocks.
 pub fn user_message_bg(theme: &Theme) -> Color {
     theme.background_panel
 }
 
+/// Background color for thinking/reasoning blocks.
 pub fn thinking_message_bg(theme: &Theme) -> Color {
     // Thinking sits between panel and menu tones for subtle separation.
     blend(theme.background_menu, theme.background_panel, 1, 3)
 }
 
+/// Left border color for assistant message blocks.
 pub fn assistant_border_color(theme: &Theme) -> Color {
     theme.info
 }
 
+/// Left border color for thinking/reasoning blocks.
 pub fn thinking_border_color(theme: &Theme) -> Color {
     theme.background_element
 }

@@ -1,3 +1,5 @@
+//! Tool implementation for listing directory contents as an indented tree.
+
 use async_trait::async_trait;
 use glob::Pattern;
 use std::collections::{HashMap, HashSet};
@@ -35,9 +37,11 @@ const IGNORE_PATTERNS: &[&str] = &[
 
 const LIMIT: usize = 100;
 
+/// Tool that lists files and directories as an indented tree.
 pub struct LsTool {}
 
 impl LsTool {
+    /// Creates a new `LsTool` instance.
     pub fn new() -> Self {
         Self {}
     }

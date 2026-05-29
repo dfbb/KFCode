@@ -1,3 +1,5 @@
+//! Shared application context — re-exports all public context types.
+
 mod app_context;
 pub mod keybind;
 mod session_context;

@@ -1,3 +1,5 @@
+//! Renders user messages with a colored left-gutter border.
+
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 

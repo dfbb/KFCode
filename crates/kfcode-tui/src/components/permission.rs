@@ -1,3 +1,5 @@
+//! Permission request prompt shown when a tool needs user approval.
+
 use std::cell::Cell;
 
 use ratatui::prelude::Stylize;
@@ -11,25 +13,41 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Category of resource access being requested.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PermissionType {
+    /// Read a file.
     ReadFile,
+    /// Write a file.
     WriteFile,
+    /// Edit a file.
     Edit,
+    /// Execute an arbitrary command.
     ExecuteCommand,
+    /// Run a shell command via bash.
     Bash,
+    /// Make a network request.
     NetworkRequest,
+    /// Perform a glob search.
     Glob,
+    /// Perform a grep search.
     Grep,
+    /// List a directory.
     List,
+    /// Perform a task operation.
     Task,
+    /// Fetch web content.
     WebFetch,
+    /// Perform a web search.
     WebSearch,
+    /// Search code.
     CodeSearch,
+    /// Access a directory outside the project root.
     ExternalDirectory,
 }
 
 impl PermissionType {
+    /// Human-readable label for this permission type.
     pub fn label(&self) -> &'static str {
         match self {
             PermissionType::ReadFile => "Read file",
@@ -49,6 +67,7 @@ impl PermissionType {
         }
     }
 
+    /// Short bracketed icon for this permission type.
     pub fn icon(&self) -> &'static str {
         match self {
             PermissionType::ReadFile => "[R]",
@@ -69,6 +88,7 @@ impl PermissionType {
     }
 }
 
+/// A pending permission request from a tool.
 #[derive(Clone, Debug)]
 pub struct PermissionRequest {
     pub id: String,
@@ -77,13 +97,18 @@ pub struct PermissionRequest {
     pub tool_name: String,
 }
 
+/// The user's decision on a permission request.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PermissionAction {
+    /// Allow this single request.
     Approve,
+    /// Deny this request.
     Deny,
+    /// Allow this request and all future requests of the same kind.
     ApproveAlways,
 }
 
+/// Inline prompt that queues and displays permission requests.
 pub struct PermissionPrompt {
     requests: Vec<PermissionRequest>,
     current_index: usize,
@@ -93,6 +118,7 @@ pub struct PermissionPrompt {
 }
 
 impl PermissionPrompt {
+    /// Create an empty permission prompt.
     pub fn new() -> Self {
         Self {
             requests: Vec::new(),
@@ -103,15 +129,18 @@ impl PermissionPrompt {
         }
     }
 
+    /// Enqueue a new permission request and open the prompt.
     pub fn add_request(&mut self, request: PermissionRequest) {
         self.requests.push(request);
         self.is_open = !self.requests.is_empty();
     }
 
+    /// Return the currently displayed request without removing it.
     pub fn current_request(&self) -> Option<&PermissionRequest> {
         self.requests.get(self.current_index)
     }
 
+    /// Remove and return the current request as approved.
     pub fn approve(&mut self) -> Option<PermissionRequest> {
         if self.current_index < self.requests.len() {
             let request = self.requests.remove(self.current_index);
@@ -124,6 +153,7 @@ impl PermissionPrompt {
         }
     }
 
+    /// Remove and return the current request as denied.
     pub fn deny(&mut self) -> Option<PermissionRequest> {
         if self.current_index < self.requests.len() {
             let request = self.requests.remove(self.current_index);
@@ -136,26 +166,31 @@ impl PermissionPrompt {
         }
     }
 
+    /// Approve the current request and mark it as always-allowed.
     pub fn approve_always(&mut self) -> Option<PermissionRequest> {
         let mut request = self.approve()?;
         request.id = format!("{}_always", request.id);
         Some(request)
     }
 
+    /// Dismiss all pending requests and close the prompt.
     pub fn close(&mut self) {
         self.requests.clear();
         self.current_index = 0;
         self.is_open = false;
     }
 
+    /// Returns true if there are no pending requests.
     pub fn is_empty(&self) -> bool {
         self.requests.is_empty()
     }
 
+    /// Number of queued permission requests.
     pub fn pending_count(&self) -> usize {
         self.requests.len()
     }
 
+    /// Handle a mouse click, mapping button columns to pending actions.
     pub fn handle_click(&mut self, col: u16, row: u16) {
         if !self.is_open || self.requests.is_empty() {
             return;
@@ -192,10 +227,12 @@ impl PermissionPrompt {
         }
     }
 
+    /// Consume and return any action set by a mouse click.
     pub fn take_pending_action(&mut self) -> Option<PermissionAction> {
         self.pending_action.take()
     }
 
+    /// Render the permission prompt at the bottom of the given area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.is_open || self.requests.is_empty() {
             return;

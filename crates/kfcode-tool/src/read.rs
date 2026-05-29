@@ -1,3 +1,4 @@
+//! Tool for reading files, directories, and binary assets from the local filesystem.
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -19,17 +20,20 @@ const INSTRUCTION_FILES: &[&str] = &[
     ".kfcoderules",
 ];
 
+/// Reads files or directories from the local filesystem, with optional pagination.
 pub struct ReadTool {
     directory: PathBuf,
 }
 
 impl ReadTool {
+    /// Creates a `ReadTool` rooted at the current working directory.
     pub fn new() -> Self {
         Self {
             directory: std::env::current_dir().unwrap_or_default(),
         }
     }
 
+    /// Creates a `ReadTool` rooted at the given directory.
     pub fn with_directory(directory: impl Into<PathBuf>) -> Self {
         Self {
             directory: directory.into(),

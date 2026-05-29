@@ -1,3 +1,5 @@
+//! Main application struct and event loop for the kfcode TUI.
+
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -37,6 +39,7 @@ use crate::ui::{Clipboard, Selection};
 const TICK_RATE_MS: u64 = 16;
 const MAX_EVENTS_PER_FRAME: usize = 256;
 
+/// Root application struct that owns all UI state, dialogs, and the event receiver.
 pub struct App {
     context: Arc<AppContext>,
     state: AppState,
@@ -82,6 +85,7 @@ pub struct App {
 }
 
 impl App {
+    /// Construct the application, spawn the input thread, and connect to the backend.
     pub fn new() -> anyhow::Result<Self> {
         let (event_tx, event_rx) = mpsc::channel();
         let event_tx_input = event_tx.clone();
@@ -237,6 +241,7 @@ impl App {
         Ok(app)
     }
 
+    /// Enter the main event loop; returns when the user exits.
     pub fn run(&mut self) -> anyhow::Result<()> {
         self.draw()?;
 

@@ -1,9 +1,14 @@
+//! Utilities for detecting and requesting permission to access paths outside the project root.
+
 use crate::{PermissionRequest, ToolContext, ToolError};
 use std::path::Path;
 
+/// Options controlling how an external directory permission check is performed.
 #[derive(Debug, Clone)]
 pub struct ExternalDirectoryOptions {
+    /// When `true`, skip the permission check entirely.
     pub bypass: bool,
+    /// Whether the target path is a file or a directory.
     pub kind: ExternalDirectoryKind,
 }
 
@@ -16,12 +21,16 @@ impl Default for ExternalDirectoryOptions {
     }
 }
 
+/// Distinguishes whether a target path refers to a file or a directory.
 #[derive(Debug, Clone, Copy)]
 pub enum ExternalDirectoryKind {
+    /// The target is a regular file.
     File,
+    /// The target is a directory.
     Directory,
 }
 
+/// Checks whether `target` is outside the project root and, if so, requests permission.
 pub async fn assert_external_directory(
     ctx: &ToolContext,
     target: Option<&str>,
@@ -76,6 +85,7 @@ fn is_within_project(target: &str, project_root: &str) -> bool {
     false
 }
 
+/// Returns the parent directory of `target` according to its kind.
 pub fn get_parent_directory(target: &str, kind: ExternalDirectoryKind) -> String {
     match kind {
         ExternalDirectoryKind::Directory => target.to_string(),
@@ -86,6 +96,7 @@ pub fn get_parent_directory(target: &str, kind: ExternalDirectoryKind) -> String
     }
 }
 
+/// Builds a glob pattern that matches all direct children of `parent_dir`.
 pub fn make_glob_pattern(parent_dir: &str) -> String {
     format!("{}/*", parent_dir)
 }

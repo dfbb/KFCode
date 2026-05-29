@@ -1,3 +1,5 @@
+//! Renders a revert-pending card above the message list.
+
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
@@ -10,6 +12,7 @@ use crate::theme::Theme;
 
 const DIFF_PREVIEW_LINES: usize = 8;
 
+/// Build the lines for a revert-pending card from the given revert info.
 pub fn render_revert_card(revert: &RevertInfo, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = vec![
         Line::from(vec![

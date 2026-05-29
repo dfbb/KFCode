@@ -1,9 +1,12 @@
+//! Slash-command registry, fuzzy search, and command action definitions.
+
 use std::collections::HashMap;
 use std::hash::Hash;
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
+/// Score `target` against `query` using nucleo fuzzy matching; returns `None` on no match.
 pub fn fuzzy_match(query: &str, target: &str) -> Option<i32> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
@@ -18,16 +21,24 @@ pub fn fuzzy_match(query: &str, target: &str) -> Option<i32> {
         .map(|score| score.min(i32::MAX as u32) as i32)
 }
 
+/// Logical grouping for slash commands shown in the command palette.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CommandCategory {
+    /// Session lifecycle commands (new, fork, compact, etc.).
     Session,
+    /// Model and agent selection commands.
     ModelAgent,
+    /// Display and appearance toggle commands.
     Display,
+    /// Navigation commands (open dialogs, switch views).
     Navigation,
+    /// System-level commands (exit, help, status).
     System,
+    /// Prompt editing and history commands.
     Prompt,
 }
 
+/// Metadata for a single slash command registered in the command palette.
 #[derive(Clone, Debug)]
 pub struct SlashCommand {
     pub name: String,
@@ -40,6 +51,7 @@ pub struct SlashCommand {
     pub action: CommandAction,
 }
 
+/// The concrete action dispatched when a slash command is selected.
 #[derive(Clone, Debug)]
 pub enum CommandAction {
     // Session
@@ -103,12 +115,14 @@ pub enum CommandAction {
     Exit,
 }
 
+/// Registry that stores all slash commands and supports fuzzy search and category lookup.
 pub struct CommandRegistry {
     commands: HashMap<String, SlashCommand>,
     by_category: HashMap<CommandCategory, Vec<String>>,
 }
 
 impl CommandRegistry {
+    /// Create a registry pre-populated with all built-in commands.
     pub fn new() -> Self {
         let mut registry = Self {
             commands: HashMap::new(),
@@ -487,10 +501,12 @@ impl CommandRegistry {
         });
     }
 
+    /// Look up a command by its primary name or alias.
     pub fn get(&self, name: &str) -> Option<&SlashCommand> {
         self.commands.get(name)
     }
 
+    /// Return commands matching `query`, sorted by fuzzy score then suggested flag.
     pub fn search(&self, query: &str) -> Vec<&SlashCommand> {
         let mut scored: Vec<(&SlashCommand, i32)> = self
             .commands
@@ -520,6 +536,7 @@ impl CommandRegistry {
         scored.into_iter().map(|(cmd, _)| cmd).collect()
     }
 
+    /// Return all commands belonging to a given category.
     pub fn get_by_category(&self, category: &CommandCategory) -> Vec<&SlashCommand> {
         self.by_category
             .get(category)
@@ -532,6 +549,7 @@ impl CommandRegistry {
             .unwrap_or_default()
     }
 
+    /// Return every unique command (aliases deduplicated).
     pub fn all_commands(&self) -> Vec<&SlashCommand> {
         let mut seen = std::collections::HashSet::new();
         self.commands
@@ -540,6 +558,7 @@ impl CommandRegistry {
             .collect()
     }
 
+    /// Return only commands marked as suggested for quick-access display.
     pub fn suggested_commands(&self) -> Vec<&SlashCommand> {
         self.all_commands()
             .into_iter()

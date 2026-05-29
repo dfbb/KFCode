@@ -1,3 +1,5 @@
+//! Diff viewer component supporting unified and split display modes.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
@@ -8,28 +10,42 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Display mode for the diff view.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DiffMode {
+    /// Show old and new content side by side.
     Split,
+    /// Show a single interleaved diff.
     Unified,
 }
 
+/// A single line in a parsed diff.
 #[derive(Clone, Debug)]
 pub struct DiffLine {
+    /// Text content of the line (without the leading +/- prefix).
     pub content: String,
+    /// Classification of this line.
     pub line_type: DiffLineType,
+    /// Line number in the old file, if applicable.
     pub old_line_num: Option<u32>,
+    /// Line number in the new file, if applicable.
     pub new_line_num: Option<u32>,
 }
 
+/// Classification of a diff line.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DiffLineType {
+    /// Unchanged context line.
     Context,
+    /// Line added in the new version.
     Added,
+    /// Line removed from the old version.
     Removed,
+    /// Hunk header (e.g. `@@ -1,4 +1,6 @@`).
     HunkHeader,
 }
 
+/// Widget that parses and renders a unified diff.
 pub struct DiffView {
     lines: Vec<DiffLine>,
     mode: DiffMode,
@@ -37,6 +53,7 @@ pub struct DiffView {
 }
 
 impl DiffView {
+    /// Create an empty diff view in unified mode.
     pub fn new() -> Self {
         Self {
             lines: Vec::new(),
@@ -45,11 +62,13 @@ impl DiffView {
         }
     }
 
+    /// Parse and store the given unified diff text.
     pub fn with_content(mut self, content: &str) -> Self {
         self.parse_diff(content);
         self
     }
 
+    /// Set the display mode.
     pub fn with_mode(mut self, mode: DiffMode) -> Self {
         self.mode = mode;
         self
@@ -149,6 +168,7 @@ impl DiffView {
         }
     }
 
+    /// Change the display mode on an existing view.
     pub fn set_mode(&mut self, mode: DiffMode) {
         self.mode = mode;
     }
@@ -190,18 +210,21 @@ impl DiffView {
         lines
     }
 
+    /// Scroll up by one line.
     pub fn scroll_up(&mut self) {
         if self.scroll_offset > 0 {
             self.scroll_offset -= 1;
         }
     }
 
+    /// Scroll down by one line, clamped to `max`.
     pub fn scroll_down(&mut self, max: u16) {
         if self.scroll_offset < max {
             self.scroll_offset += 1;
         }
     }
 
+    /// Render the diff into the given area, choosing split or unified layout automatically.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if self.lines.is_empty() {
             let empty = Paragraph::new("No changes")

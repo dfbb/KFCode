@@ -1,3 +1,5 @@
+//! Dialog for forking a session from a selected message.
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// A single message entry shown in the fork dialog.
 #[derive(Clone, Debug)]
 pub struct ForkEntry {
     pub message_id: String,
@@ -16,6 +19,7 @@ pub struct ForkEntry {
     pub timestamp: String,
 }
 
+/// Dialog that lists session messages and lets the user choose a fork point.
 pub struct ForkDialog {
     entries: Vec<ForkEntry>,
     state: ListState,
@@ -24,6 +28,7 @@ pub struct ForkDialog {
 }
 
 impl ForkDialog {
+    /// Creates a new, closed fork dialog with no entries.
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
@@ -33,6 +38,7 @@ impl ForkDialog {
         }
     }
 
+    /// Opens the dialog for the given session, populating it with `entries`.
     pub fn open(&mut self, session_id: String, entries: Vec<ForkEntry>) {
         self.session_id = Some(session_id);
         self.entries = entries;
@@ -44,18 +50,22 @@ impl ForkDialog {
         self.open = true;
     }
 
+    /// Closes the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Returns the session ID that was passed to `open`.
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(i) = self.state.selected() {
             if i > 0 {
@@ -64,6 +74,7 @@ impl ForkDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(i) = self.state.selected() {
             if i < self.entries.len().saturating_sub(1) {
@@ -72,14 +83,17 @@ impl ForkDialog {
         }
     }
 
+    /// Returns a reference to the currently highlighted entry, if any.
     pub fn selected_entry(&self) -> Option<&ForkEntry> {
         self.state.selected().and_then(|i| self.entries.get(i))
     }
 
+    /// Returns the message ID of the currently highlighted entry, if any.
     pub fn selected_message_id(&self) -> Option<&str> {
         self.selected_entry().map(|e| e.message_id.as_str())
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

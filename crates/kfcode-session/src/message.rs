@@ -1,3 +1,4 @@
+//! Legacy v1 message types used for in-memory session state.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,6 +14,7 @@ pub struct MessageUsage {
     pub total_cost: f64,
 }
 
+/// A single message in a session, containing one or more content parts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionMessage {
     pub id: String,
@@ -25,6 +27,7 @@ pub struct SessionMessage {
     pub usage: Option<MessageUsage>,
 }
 
+/// The role of a message sender.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessageRole {
     User,
@@ -33,6 +36,7 @@ pub enum MessageRole {
     Tool,
 }
 
+/// A single content part within a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessagePart {
     pub id: String,
@@ -42,6 +46,7 @@ pub struct MessagePart {
     pub message_id: Option<String>,
 }
 
+/// The typed content of a message part.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PartType {
@@ -106,6 +111,7 @@ pub enum PartType {
 }
 
 impl SessionMessage {
+    /// Create a new user message with a single text part.
     pub fn user(session_id: impl Into<String>, text: impl Into<String>) -> Self {
         Self {
             id: format!("msg_{}", uuid::Uuid::new_v4()),
@@ -123,6 +129,7 @@ impl SessionMessage {
         }
     }
 
+    /// Create a new empty assistant message.
     pub fn assistant(session_id: impl Into<String>) -> Self {
         Self {
             id: format!("msg_{}", uuid::Uuid::new_v4()),
@@ -135,6 +142,7 @@ impl SessionMessage {
         }
     }
 
+    /// Append a text part to this message.
     pub fn add_text(&mut self, text: impl Into<String>) {
         self.parts.push(MessagePart {
             id: format!("prt_{}", uuid::Uuid::new_v4()),
@@ -144,6 +152,7 @@ impl SessionMessage {
         });
     }
 
+    /// Append a reasoning part to this message.
     pub fn add_reasoning(&mut self, text: impl Into<String>) {
         self.parts.push(MessagePart {
             id: format!("prt_{}", uuid::Uuid::new_v4()),
@@ -153,6 +162,7 @@ impl SessionMessage {
         });
     }
 
+    /// Append a tool-call part to this message.
     pub fn add_tool_call(
         &mut self,
         id: impl Into<String>,
@@ -171,6 +181,7 @@ impl SessionMessage {
         });
     }
 
+    /// Append a tool-result part to this message.
     pub fn add_tool_result(
         &mut self,
         tool_call_id: impl Into<String>,
@@ -189,6 +200,7 @@ impl SessionMessage {
         });
     }
 
+    /// Append a file attachment part to this message.
     pub fn add_file(
         &mut self,
         url: impl Into<String>,
@@ -207,6 +219,7 @@ impl SessionMessage {
         });
     }
 
+    /// Append an agent-status part to this message.
     pub fn add_agent(&mut self, name: impl Into<String>) {
         self.parts.push(MessagePart {
             id: format!("prt_{}", uuid::Uuid::new_v4()),
@@ -219,6 +232,7 @@ impl SessionMessage {
         });
     }
 
+    /// Append a subtask part to this message.
     pub fn add_subtask(&mut self, id: impl Into<String>, description: impl Into<String>) {
         self.parts.push(MessagePart {
             id: format!("prt_{}", uuid::Uuid::new_v4()),
@@ -232,6 +246,7 @@ impl SessionMessage {
         });
     }
 
+    /// Concatenate all text parts into a single string.
     pub fn get_text(&self) -> String {
         self.parts
             .iter()
@@ -243,6 +258,7 @@ impl SessionMessage {
             .join("")
     }
 
+    /// Concatenate all reasoning parts into a single string.
     pub fn get_reasoning(&self) -> String {
         self.parts
             .iter()

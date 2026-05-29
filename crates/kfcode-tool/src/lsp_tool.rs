@@ -1,3 +1,5 @@
+//! Tool implementation for Language Server Protocol operations such as go-to-definition and find-references.
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -7,34 +9,55 @@ use lsp_types;
 
 use crate::{Metadata, Tool, ToolContext, ToolError, ToolResult};
 
+/// Parameters for an LSP tool invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LspParams {
+    /// The LSP operation to perform.
     pub operation: LspOperation,
+    /// Path to the file on which to perform the operation.
     pub file_path: String,
+    /// 1-based line number for position-sensitive operations.
     pub line: Option<u32>,
+    /// 1-based character offset for position-sensitive operations.
     pub character: Option<u32>,
+    /// Query string used by the `WorkspaceSymbol` operation.
     pub query: Option<String>,
+    /// New identifier name used by the `Rename` operation.
     pub new_name: Option<String>,
 }
 
+/// Identifies which LSP operation to execute.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LspOperation {
+    /// Navigate to the definition of the symbol at the cursor.
     GoToDefinition,
+    /// Find all references to the symbol at the cursor.
     FindReferences,
+    /// Show hover documentation for the symbol at the cursor.
     Hover,
+    /// List all symbols defined in the current document.
     DocumentSymbol,
+    /// Search for symbols across the entire workspace.
     WorkspaceSymbol,
+    /// Navigate to the implementation of the symbol at the cursor.
     GoToImplementation,
+    /// Navigate to the type definition of the symbol at the cursor.
     TypeDefinition,
+    /// Rename the symbol at the cursor across the workspace.
     Rename,
+    /// Retrieve diagnostics (errors and warnings) for the file.
     Diagnostics,
+    /// Prepare a call hierarchy item at the cursor position.
     PrepareCallHierarchy,
+    /// List callers of the function at the cursor.
     IncomingCalls,
+    /// List functions called by the function at the cursor.
     OutgoingCalls,
 }
 
+/// Tool that exposes LSP operations for code navigation and analysis.
 pub struct LspTool;
 
 #[async_trait]

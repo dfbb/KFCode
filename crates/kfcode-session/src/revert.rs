@@ -1,3 +1,8 @@
+//! Session revert: snapshot-based undo and message cleanup.
+//!
+//! `RevertManager` records a filesystem snapshot when a revert point is set,
+//! restores it on `unrevert`, and trims the message history on `cleanup`.
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -6,32 +11,49 @@ use std::path::PathBuf;
 use crate::session::{FileDiff as SessionFileDiff, Session, SessionManager};
 use crate::snapshot::Snapshot;
 
+/// Input identifying the revert target within a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RevertInput {
+    /// Session to revert.
     pub session_id: String,
+    /// Message ID at which to set the revert point.
     pub message_id: String,
+    /// Optional part ID for finer-grained revert targeting.
     pub part_id: Option<String>,
 }
 
+/// Resolved revert metadata stored on the session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RevertInfo {
+    /// Message ID of the revert anchor.
     pub message_id: String,
+    /// Part ID of the revert anchor, if part-level.
     pub part_id: Option<String>,
+    /// Snapshot hash captured at revert time.
     pub snapshot: Option<String>,
+    /// JSON-serialized file diffs between the snapshot and the current worktree.
     pub diff: Option<String>,
 }
 
+/// Aggregated diff statistics for a revert operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RevertSummary {
+    /// Total lines added since the revert point.
     pub additions: u64,
+    /// Total lines deleted since the revert point.
     pub deletions: u64,
+    /// Number of files changed since the revert point.
     pub files: u64,
 }
 
+/// Per-file diff statistics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileDiff {
+    /// Relative file path.
     pub path: String,
+    /// Lines added in this file.
     pub additions: u64,
+    /// Lines deleted in this file.
     pub deletions: u64,
 }
 
@@ -45,15 +67,18 @@ impl From<SessionFileDiff> for FileDiff {
     }
 }
 
+/// Manages revert operations for a worktree.
 pub struct RevertManager {
     worktree: PathBuf,
 }
 
 impl RevertManager {
+    /// Create a manager rooted at `worktree`.
     pub fn new(worktree: PathBuf) -> Self {
         Self { worktree }
     }
 
+    /// Set a revert point on the session, capturing a filesystem snapshot.
     pub fn revert(
         &self,
         input: &RevertInput,
@@ -132,6 +157,7 @@ impl RevertManager {
         Ok(Some(session))
     }
 
+    /// Restore the worktree to the snapshot stored in the session's revert state.
     pub fn unrevert(
         &self,
         session_id: &str,
@@ -159,6 +185,7 @@ impl RevertManager {
         Ok(Some(session))
     }
 
+    /// Trim the session message history back to the revert anchor and clear the revert state.
     pub fn cleanup(
         &self,
         session_id: &str,
@@ -354,14 +381,17 @@ impl Default for RevertManager {
     }
 }
 
+/// Convenience wrapper: set a revert point using a default `RevertManager`.
 pub fn revert(input: &RevertInput, manager: &mut SessionManager) -> Result<Option<Session>> {
     RevertManager::default().revert(input, manager)
 }
 
+/// Convenience wrapper: restore the worktree using a default `RevertManager`.
 pub fn unrevert(session_id: &str, manager: &mut SessionManager) -> Result<Option<Session>> {
     RevertManager::default().unrevert(session_id, manager)
 }
 
+/// Convenience wrapper: trim message history using a default `RevertManager`.
 pub fn cleanup(session_id: &str, revert: &RevertInfo, manager: &mut SessionManager) -> Result<()> {
     RevertManager::default().cleanup(session_id, revert, manager)
 }

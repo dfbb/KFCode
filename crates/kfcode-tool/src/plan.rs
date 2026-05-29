@@ -1,17 +1,22 @@
+//! Tools for switching between plan mode and build mode within a session.
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::{Metadata, QuestionDef, QuestionOption, Tool, ToolContext, ToolError, ToolResult};
 
+/// Parameters for entering plan mode (currently empty; reserved for future use).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanEnterParams {}
 
+/// Parameters for exiting plan mode (currently empty; reserved for future use).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlanExitParams {}
 
+/// Tool that switches the active agent to plan mode.
 pub struct PlanEnterTool;
 
+/// Tool that switches the active agent back to build mode after planning.
 pub struct PlanExitTool;
 
 const PLAN_FILE: &str = "PLAN.md";

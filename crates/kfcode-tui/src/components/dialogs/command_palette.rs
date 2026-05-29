@@ -1,3 +1,5 @@
+//! Fuzzy-searchable command palette dialog.
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -10,6 +12,7 @@ use crate::command::{fuzzy_match, CommandAction};
 use crate::context::MessageDensity;
 use crate::theme::Theme;
 
+/// A single entry in the command palette.
 #[derive(Clone, Debug)]
 pub struct Command {
     pub action: CommandAction,
@@ -18,6 +21,7 @@ pub struct Command {
     pub category: String,
 }
 
+/// Dialog that lets the user search and invoke application commands by name.
 pub struct CommandPalette {
     commands: Vec<Command>,
     filtered: Vec<usize>,
@@ -27,6 +31,7 @@ pub struct CommandPalette {
 }
 
 impl CommandPalette {
+    /// Creates a new palette pre-populated with all built-in commands.
     pub fn new() -> Self {
         let commands = vec![
             Command {
@@ -230,6 +235,7 @@ impl CommandPalette {
         }
     }
 
+    /// Opens the palette and resets the search query.
     pub fn open(&mut self) {
         self.open = true;
         self.query.clear();
@@ -237,24 +243,29 @@ impl CommandPalette {
         self.state.select(Some(0));
     }
 
+    /// Closes the palette.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the palette is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Appends a character to the search query and re-filters the list.
     pub fn handle_input(&mut self, c: char) {
         self.query.push(c);
         self.filter_commands();
     }
 
+    /// Removes the last character from the search query and re-filters.
     pub fn handle_backspace(&mut self) {
         self.query.pop();
         self.filter_commands();
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -263,6 +274,7 @@ impl CommandPalette {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.filtered.len().saturating_sub(1) {
@@ -271,6 +283,7 @@ impl CommandPalette {
         }
     }
 
+    /// Returns a reference to the currently highlighted command, if any.
     pub fn selected_command(&self) -> Option<&Command> {
         self.state
             .selected()
@@ -278,10 +291,12 @@ impl CommandPalette {
             .and_then(|&idx| self.commands.get(idx))
     }
 
+    /// Returns the action of the currently highlighted command, if any.
     pub fn selected_action(&self) -> Option<CommandAction> {
         self.selected_command().map(|cmd| cmd.action.clone())
     }
 
+    /// Updates toggle-style command labels to reflect the current UI state.
     pub fn sync_visibility_labels(
         &mut self,
         show_thinking: bool,
@@ -372,6 +387,7 @@ impl CommandPalette {
         }
     }
 
+    /// Renders the palette into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

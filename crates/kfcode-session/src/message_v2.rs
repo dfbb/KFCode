@@ -1,3 +1,4 @@
+//! V2 message types and conversion utilities for the LLM provider layer.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -8,6 +9,7 @@ use kfcode_provider::{
 };
 
 
+/// The origin of a file part: a plain file, a code symbol, or an MCP resource.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum FilePartSource {
@@ -29,6 +31,7 @@ pub enum FilePartSource {
     },
 }
 
+/// A slice of source text with its line offsets.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileSourceText {
     pub value: String,
@@ -36,18 +39,21 @@ pub struct FileSourceText {
     pub end: i32,
 }
 
+/// An LSP-style range (start/end positions) within a file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LspRange {
     pub start: LspPosition,
     pub end: LspPosition,
 }
 
+/// A zero-based line/character position in a text document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LspPosition {
     pub line: i32,
     pub character: i32,
 }
 
+/// A file attachment part attached to a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilePart {
     pub id: String,
@@ -61,6 +67,7 @@ pub struct FilePart {
     pub source: Option<FilePartSource>,
 }
 
+/// An agent invocation part within a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentPart {
     pub id: String,
@@ -71,6 +78,7 @@ pub struct AgentPart {
     pub source: Option<AgentSource>,
 }
 
+/// Source location metadata for an agent part.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSource {
     pub value: String,
@@ -78,6 +86,7 @@ pub struct AgentSource {
     pub end: i32,
 }
 
+/// A context-compaction marker part within a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactionPart {
     pub id: String,
@@ -86,6 +95,7 @@ pub struct CompactionPart {
     pub auto: bool,
 }
 
+/// A delegated subtask part, representing work dispatched to a sub-agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubtaskPart {
     pub id: String,
@@ -100,12 +110,14 @@ pub struct SubtaskPart {
     pub command: Option<String>,
 }
 
+/// A reference to a specific provider/model combination.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRef {
     pub provider_id: String,
     pub model_id: String,
 }
 
+/// A retry-attempt part recording the error and timing of a failed attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPart {
     pub id: String,
@@ -116,11 +128,13 @@ pub struct RetryPart {
     pub time: RetryTime,
 }
 
+/// Timestamp of when a retry was created (milliseconds since epoch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryTime {
     pub created: i64,
 }
 
+/// Marks the beginning of an agentic step within a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepStartPart {
     pub id: String,
@@ -130,6 +144,7 @@ pub struct StepStartPart {
     pub snapshot: Option<String>,
 }
 
+/// Marks the end of an agentic step, including cost and token usage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepFinishPart {
     pub id: String,
@@ -142,6 +157,7 @@ pub struct StepFinishPart {
     pub tokens: StepTokens,
 }
 
+/// Token counts for a single agentic step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepTokens {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -152,12 +168,14 @@ pub struct StepTokens {
     pub cache: CacheTokens,
 }
 
+/// Prompt-cache token counts (read and write) for a step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheTokens {
     pub read: i32,
     pub write: i32,
 }
 
+/// The lifecycle state of a tool call within a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status")]
 pub enum ToolState {
@@ -195,11 +213,13 @@ pub enum ToolState {
     },
 }
 
+/// Timestamp of when a tool call started running (milliseconds since epoch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunningTime {
     pub start: i64,
 }
 
+/// Start/end timestamps for a completed tool call; `compacted` is set when the result was cleared by compaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletedTime {
     pub start: i64,
@@ -208,12 +228,14 @@ pub struct CompletedTime {
     pub compacted: Option<i64>,
 }
 
+/// Start/end timestamps for a tool call that ended in error.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorTime {
     pub start: i64,
     pub end: i64,
 }
 
+/// A tool-call part, tracking the full lifecycle from pending to completed or error.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPart {
     pub id: String,
@@ -226,6 +248,7 @@ pub struct ToolPart {
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
+/// Metadata for a message, discriminated by role.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "role")]
 pub enum MessageInfo {
@@ -273,11 +296,13 @@ pub enum MessageInfo {
     },
 }
 
+/// Creation timestamp for a user message (milliseconds since epoch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserTime {
     pub created: i64,
 }
 
+/// Optional summary attached to a user message, including file diffs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -287,6 +312,7 @@ pub struct UserSummary {
     pub diffs: Vec<FileDiff>,
 }
 
+/// A before/after snapshot of a single file changed during a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileDiff {
     pub path: String,
@@ -295,6 +321,7 @@ pub struct FileDiff {
     pub new_content: String,
 }
 
+/// Timestamps for an assistant message (created, and optionally completed).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssistantTime {
     pub created: i64,
@@ -302,12 +329,14 @@ pub struct AssistantTime {
     pub completed: Option<i64>,
 }
 
+/// Working directory and project root at the time a message was generated.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessagePath {
     pub cwd: String,
     pub root: String,
 }
 
+/// Token counts for an assistant message, including cache and reasoning tokens.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssistantTokens {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -318,6 +347,7 @@ pub struct AssistantTokens {
     pub cache: CacheTokens,
 }
 
+/// A structured error attached to an assistant message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "name")]
 pub enum MessageError {
@@ -355,6 +385,7 @@ pub enum MessageError {
     Unknown { message: String },
 }
 
+/// The desired output format for a user message (plain text or JSON schema).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum OutputFormat {
@@ -372,12 +403,14 @@ fn default_retry_count() -> i32 {
     2
 }
 
+/// A message together with all of its content parts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageWithParts {
     pub info: MessageInfo,
     pub parts: Vec<Part>,
 }
 
+/// A typed content part belonging to a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Part {
@@ -459,6 +492,7 @@ impl Part {
     }
 }
 
+/// Optional start/end timestamps for a text part (milliseconds since epoch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextTime {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -467,6 +501,7 @@ pub struct TextTime {
     pub end: Option<i64>,
 }
 
+/// Start/end timestamps for a reasoning part (milliseconds since epoch).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningTime {
     pub start: i64,
@@ -474,6 +509,7 @@ pub struct ReasoningTime {
     pub end: Option<i64>,
 }
 
+/// A structured API error with optional HTTP status and retry hint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
     pub message: String,
@@ -488,6 +524,7 @@ pub struct ApiError {
     pub metadata: Option<HashMap<String, String>>,
 }
 
+/// A streaming delta update for a single field of a part.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartDelta {
     pub session_id: String,

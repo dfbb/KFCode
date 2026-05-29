@@ -1,3 +1,5 @@
+//! Dialog for browsing, switching, renaming, and deleting sessions.
+
 use chrono::{Local, TimeZone};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -9,6 +11,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Summary data for a single session shown in the list.
 #[derive(Clone, Debug)]
 pub struct SessionItem {
     pub id: String,
@@ -19,12 +22,16 @@ pub struct SessionItem {
     pub is_busy: bool,
 }
 
+/// Tracks whether a delete action is pending confirmation or has been confirmed.
 #[derive(Clone, Debug)]
 pub enum DeleteState {
+    /// Delete key was pressed once; the session ID is armed for deletion.
     Armed(String),
+    /// Delete key was pressed a second time; deletion should proceed.
     Confirmed(String),
 }
 
+/// Dialog that lists sessions with search, rename, and delete capabilities.
 pub struct SessionListDialog {
     sessions: Vec<SessionItem>,
     filtered: Vec<usize>,
@@ -38,6 +45,7 @@ pub struct SessionListDialog {
 }
 
 impl SessionListDialog {
+    /// Creates a new, closed session list dialog with no sessions loaded.
     pub fn new() -> Self {
         let mut state = ListState::default();
         state.select(Some(0));
@@ -54,6 +62,7 @@ impl SessionListDialog {
         }
     }
 
+    /// Replaces the session list, filtering out child sessions and sorting by recency.
     pub fn set_sessions(&mut self, mut sessions: Vec<SessionItem>) {
         sessions.retain(|s| s.parent_id.is_none());
         sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -61,6 +70,7 @@ impl SessionListDialog {
         self.filter();
     }
 
+    /// Opens the dialog, optionally pre-selecting the currently active session.
     pub fn open(&mut self, current_session_id: Option<&str>) {
         self.open = true;
         self.query.clear();
@@ -81,6 +91,7 @@ impl SessionListDialog {
         }
     }
 
+    /// Closes the dialog and clears any pending delete or rename state.
     pub fn close(&mut self) {
         self.open = false;
         self.pending_delete_session_id = None;
@@ -88,30 +99,36 @@ impl SessionListDialog {
         self.rename_input.clear();
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Returns `true` if an inline rename is currently in progress.
     pub fn is_renaming(&self) -> bool {
         self.rename_session_id.is_some()
     }
 
+    /// Returns the current search query string.
     pub fn query(&self) -> &str {
         &self.query
     }
 
+    /// Appends a character to the search query and re-filters the list.
     pub fn handle_input(&mut self, c: char) {
         self.query.push(c);
         self.pending_delete_session_id = None;
         self.filter();
     }
 
+    /// Removes the last character from the search query and re-filters.
     pub fn handle_backspace(&mut self) {
         self.query.pop();
         self.pending_delete_session_id = None;
         self.filter();
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -121,6 +138,7 @@ impl SessionListDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.filtered.len().saturating_sub(1) {
@@ -130,6 +148,7 @@ impl SessionListDialog {
         }
     }
 
+    /// Returns the ID of the currently highlighted session, if any.
     pub fn selected_session_id(&self) -> Option<String> {
         self.state
             .selected()
@@ -138,6 +157,7 @@ impl SessionListDialog {
             .map(|s| s.id.clone())
     }
 
+    /// Begins an inline rename for the currently selected session; returns `false` if nothing is selected.
     pub fn start_rename_selected(&mut self) -> bool {
         let Some(selected_id) = self.selected_session_id() else {
             return false;
@@ -155,19 +175,23 @@ impl SessionListDialog {
         true
     }
 
+    /// Cancels the in-progress rename without saving.
     pub fn cancel_rename(&mut self) {
         self.rename_session_id = None;
         self.rename_input.clear();
     }
 
+    /// Appends a character to the rename input field.
     pub fn handle_rename_input(&mut self, c: char) {
         self.rename_input.push(c);
     }
 
+    /// Removes the last character from the rename input field.
     pub fn handle_rename_backspace(&mut self) {
         self.rename_input.pop();
     }
 
+    /// Confirms the rename and returns `(session_id, new_title)`, or `None` if the title is empty.
     pub fn confirm_rename(&mut self) -> Option<(String, String)> {
         let session_id = self.rename_session_id.clone()?;
         let title = self.rename_input.trim().to_string();
@@ -179,6 +203,7 @@ impl SessionListDialog {
         Some((session_id, title))
     }
 
+    /// Arms or confirms deletion of the selected session, returning the resulting `DeleteState`.
     pub fn trigger_delete_selected(&mut self) -> Option<DeleteState> {
         let selected_id = self.selected_session_id()?;
         if self.pending_delete_session_id.as_deref() == Some(selected_id.as_str()) {
@@ -209,6 +234,7 @@ impl SessionListDialog {
         });
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

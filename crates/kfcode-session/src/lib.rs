@@ -1,3 +1,4 @@
+//! Session management, message handling, and LLM streaming for kfcode.
 #![allow(ambiguous_glob_reexports)]
 
 pub mod compaction;

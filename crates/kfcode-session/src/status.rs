@@ -1,3 +1,8 @@
+//! Session run-status tracking and bus event publishing.
+//!
+//! Mirrors the TypeScript `SessionStatus` namespace: tracks idle/busy/retry
+//! states per session and publishes `session.status` and `session.idle` events.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,17 +24,24 @@ pub static SESSION_IDLE_EVENT: BusEventDef = BusEventDef::new("session.idle");
 // Status types (matches TS SessionStatus.Info union type)
 // ============================================================================
 
+/// The run status of a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SessionStatusInfo {
+    /// Session is idle and ready to accept a new prompt.
     #[serde(rename = "idle")]
     Idle,
+    /// Session is waiting to retry after a transient error.
     #[serde(rename = "retry")]
     Retry {
+        /// Current attempt number.
         attempt: u32,
+        /// Human-readable reason for the retry.
         message: String,
+        /// Unix timestamp (ms) when the next attempt will begin.
         next: u64,
     },
+    /// Session is actively processing a prompt.
     #[serde(rename = "busy")]
     Busy,
 }
@@ -44,12 +56,14 @@ impl Default for SessionStatusInfo {
 // Status manager (matches TS SessionStatus namespace)
 // ============================================================================
 
+/// Tracks and publishes the run status of all active sessions.
 pub struct SessionStatusManager {
     state: Arc<RwLock<HashMap<String, SessionStatusInfo>>>,
     bus: Option<Arc<Bus>>,
 }
 
 impl SessionStatusManager {
+    /// Create a status manager without bus publishing.
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(HashMap::new())),

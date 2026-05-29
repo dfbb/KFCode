@@ -1,22 +1,33 @@
+//! Filesystem snapshot management using a bare git repository under `.kfcode/snapshot`.
+//!
+//! Provides `track`, `restore`, `diff`, and `diff_full` operations that mirror
+//! the TypeScript `Snapshot` class used for session revert support.
+
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+/// A git tree hash paired with the files it covers, used for selective restore.
 #[derive(Debug, Clone)]
 pub struct SnapshotPatch {
+    /// Git tree hash.
     pub hash: String,
+    /// File paths (absolute or relative to the worktree) to restore.
     pub files: Vec<String>,
 }
 
+/// Snapshot operations backed by a bare git repository in the worktree.
 pub struct Snapshot;
 
 impl Snapshot {
+    /// Create a new `Snapshot` instance (stateless; all methods are static-style).
     pub fn new() -> Self {
         Self
     }
 
+    /// Stage all worktree files and write a git tree object, returning its hash.
     pub fn track(directory: &Path) -> Result<String> {
         let git_dir = ensure_snapshot_repo(directory)?;
         git_add_all(directory, &git_dir)?;
@@ -24,6 +35,7 @@ impl Snapshot {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    /// Restore specific files from a set of snapshot patches.
     pub fn revert(directory: &Path, patches: Vec<SnapshotPatch>) -> Result<()> {
         let git_dir = ensure_snapshot_repo(directory)?;
         let mut seen = HashSet::new();
@@ -66,6 +78,7 @@ impl Snapshot {
         Ok(())
     }
 
+    /// Restore the entire worktree to the state recorded in `snapshot`.
     pub fn restore(directory: &Path, snapshot: &str) -> Result<()> {
         let git_dir = ensure_snapshot_repo(directory)?;
         git_output(directory, &git_dir, &["read-tree", snapshot])?;
@@ -73,6 +86,7 @@ impl Snapshot {
         Ok(())
     }
 
+    /// Compute per-file diffs between `from_hash` and the current worktree state.
     pub fn diff(directory: &Path, from_hash: &str) -> Result<Vec<super::FileDiff>> {
         let git_dir = ensure_snapshot_repo(directory)?;
         git_add_all(directory, &git_dir)?;

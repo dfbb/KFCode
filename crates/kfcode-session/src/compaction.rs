@@ -1,3 +1,8 @@
+//! Context-window compaction and tool-result pruning for sessions.
+//!
+//! Provides the `CompactionEngine` that detects overflow, summarizes history
+//! via an LLM call, and prunes large tool outputs to reclaim context space.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -24,10 +29,14 @@ const PRUNE_PROTECTED_TOOLS: &[&str] = &["skill"];
 /// Bus event definition for session.compacted (mirrors TS Event.Compacted).
 pub const EVENT_COMPACTED: BusEventDef = BusEventDef::new("session.compacted");
 
+/// Configuration for the compaction engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactionConfig {
+    /// Whether automatic overflow-triggered compaction is enabled.
     pub auto: bool,
+    /// Token budget reserved for the model's output during compaction.
     pub reserved: Option<u64>,
+    /// Whether tool-result pruning is enabled.
     pub prune: bool,
 }
 
@@ -84,16 +93,23 @@ pub enum CompactionResult {
     Stop,
 }
 
+/// Token counts for a single LLM exchange.
 #[derive(Debug, Clone)]
 pub struct TokenUsage {
+    /// Tokens in the prompt (input).
     pub input: u64,
+    /// Tokens in the completion (output).
     pub output: u64,
+    /// Tokens read from the provider cache.
     pub cache_read: u64,
+    /// Tokens written to the provider cache.
     pub cache_write: u64,
+    /// Pre-computed total; may be zero if the provider did not supply it.
     pub total: u64,
 }
 
 impl TokenUsage {
+    /// Create a new usage record with input and output counts; cache fields default to zero.
     pub fn new(input: u64, output: u64) -> Self {
         Self {
             input,
@@ -104,6 +120,7 @@ impl TokenUsage {
         }
     }
 
+    /// Set cache token counts and recompute the total.
     pub fn with_cache(mut self, read: u64, write: u64) -> Self {
         self.cache_read = read;
         self.cache_write = write;
@@ -112,10 +129,14 @@ impl TokenUsage {
     }
 }
 
+/// Context-window limits for a model.
 #[derive(Debug, Clone)]
 pub struct ModelLimits {
+    /// Total context window size in tokens.
     pub context: u64,
+    /// Maximum input tokens (if the provider exposes a separate limit).
     pub max_input: Option<u64>,
+    /// Maximum output tokens the model can generate.
     pub max_output: u64,
 }
 
@@ -130,10 +151,14 @@ pub enum ToolPartStatus {
     Error,
 }
 
+/// A tool part flattened for the prune algorithm.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PruneToolPart {
+    /// Unique part ID.
     pub id: String,
+    /// Tool name (used to check against `PRUNE_PROTECTED_TOOLS`).
     pub tool: String,
+    /// Tool output text (used to estimate token cost).
     pub output: String,
     /// Mirrors TS `part.state.status`.
     pub status: ToolPartStatus,
@@ -141,10 +166,14 @@ pub struct PruneToolPart {
     pub compacted: Option<u64>,
 }
 
+/// A message flattened to only the fields needed by the prune algorithm.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageForPrune {
+    /// `"user"` or `"assistant"`.
     pub role: String,
+    /// Tool parts belonging to this message.
     pub parts: Vec<PruneToolPart>,
+    /// Whether this message is a compaction summary (stops the prune walk).
     pub summary: bool,
 }
 
@@ -179,16 +208,19 @@ pub struct CreateCompactionInput {
     pub auto: bool,
 }
 
+/// The compaction engine: overflow detection, LLM summarization, and pruning.
 pub struct CompactionEngine {
     config: CompactionConfig,
     bus: Option<Arc<Bus>>,
 }
 
 impl CompactionEngine {
+    /// Create a new engine with the given configuration.
     pub fn new(config: CompactionConfig) -> Self {
         Self { config, bus: None }
     }
 
+    /// Attach a bus for publishing the `session.compacted` event.
     pub fn with_bus(mut self, bus: Arc<Bus>) -> Self {
         self.bus = Some(bus);
         self
@@ -229,11 +261,13 @@ impl CompactionEngine {
         count >= usable
     }
 
+    /// Estimate token count for a text string using a 4-chars-per-token heuristic.
     pub fn estimate_tokens(text: &str) -> u64 {
         let char_count = text.chars().count() as u64;
         char_count / 4
     }
 
+    /// Return the default LLM prompt asking the model to summarize the conversation.
     pub fn generate_summary_prompt() -> String {
         r#"Provide a detailed prompt for continuing our conversation above.
 Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.
@@ -264,6 +298,7 @@ When constructing the summary, try to stick to this template:
 ---"#.to_string()
     }
 
+    /// Return true if the tool output is large enough to be worth pruning.
     pub fn should_prune_tool_result(output: &str, is_protected: bool) -> bool {
         if is_protected {
             return false;
@@ -378,6 +413,7 @@ When constructing the summary, try to stick to this template:
         false
     }
 
+    /// Create a `CompactionPart` and fire the `session.compacting` plugin hook.
     pub fn create_compaction_part(auto: bool) -> CompactionPart {
         // Plugin hook: session.compacting — notify plugins that compaction is starting.
         // We spawn this as a fire-and-forget task since this method is sync.
@@ -786,15 +822,21 @@ impl Default for CompactionEngine {
     }
 }
 
+/// Metadata recorded after a compaction run completes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactionSummary {
+    /// Wall-clock time when compaction finished.
     pub created_at: DateTime<Utc>,
+    /// Estimated tokens freed by this compaction.
     pub tokens_saved: u64,
+    /// Number of messages replaced by the summary.
     pub messages_compacted: usize,
+    /// Number of tool results that were pruned.
     pub tool_results_pruned: usize,
 }
 
 impl CompactionSummary {
+    /// Create a new summary with the given statistics and the current timestamp.
     pub fn new(tokens_saved: u64, messages_compacted: usize, tool_results_pruned: usize) -> Self {
         Self {
             created_at: Utc::now(),
@@ -805,12 +847,16 @@ impl CompactionSummary {
     }
 }
 
+/// A lightweight part stored on the user message that triggered compaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactionPart {
+    /// Whether this compaction was triggered automatically by overflow.
     pub auto: bool,
+    /// Wall-clock time when the compaction part was created.
     pub created_at: DateTime<Utc>,
 }
 
+/// Estimate the combined token cost of a message body and its tool results.
 pub fn estimate_message_tokens(content: &str, tool_results: &[String]) -> u64 {
     let content_tokens = CompactionEngine::estimate_tokens(content);
     let tool_tokens: u64 = tool_results
@@ -820,10 +866,12 @@ pub fn estimate_message_tokens(content: &str, tool_results: &[String]) -> u64 {
     content_tokens + tool_tokens
 }
 
+/// Return true if the message count meets the minimum required for compaction.
 pub fn can_compact_messages(messages: usize, min_messages: usize) -> bool {
     messages >= min_messages
 }
 
+/// Return the standard auto-continue message appended after compaction.
 pub fn generate_continue_message() -> String {
     "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.".to_string()
 }

@@ -1,3 +1,5 @@
+//! Tool implementation for executing multiple tool calls in parallel within a single request.
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -8,33 +10,47 @@ use crate::{Metadata, Tool, ToolContext, ToolError, ToolResult};
 const MAX_BATCH_SIZE: usize = 25;
 const DISALLOWED_TOOLS: &[&str] = &["batch"];
 
+/// Parameters for a batch tool invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchParams {
+    /// Ordered list of tool calls to execute in parallel.
     pub tool_calls: Vec<ToolCall>,
 }
 
+/// A single tool call entry within a batch request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
+    /// Name of the tool to invoke.
     pub tool: String,
+    /// JSON parameters to pass to the tool.
     pub parameters: serde_json::Value,
 }
 
+/// The outcome of a single tool call within a batch.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchResult {
+    /// Name of the tool that was invoked.
     pub tool: String,
+    /// Whether the tool call completed without error.
     pub success: bool,
+    /// Tool output text, present on success.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
+    /// Display title for the result, present on success.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Error message, present on failure.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Additional structured metadata from the tool, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
+    /// Optional attachment payload from the tool result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachment: Option<serde_json::Value>,
 }
 
+/// Tool that runs multiple independent tool calls concurrently.
 pub struct BatchTool;
 
 type BatchFuture = Pin<Box<dyn Future<Output = BatchResult> + Send>>;

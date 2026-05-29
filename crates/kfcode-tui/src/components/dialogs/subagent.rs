@@ -1,3 +1,5 @@
+//! Dialog for inspecting a running subagent's conversation.
+
 use ratatui::prelude::Stylize;
 use ratatui::{
     layout::Rect,
@@ -9,6 +11,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Identity and message history for a subagent.
 #[derive(Clone, Debug)]
 pub struct SubagentInfo {
     pub id: String,
@@ -17,12 +20,14 @@ pub struct SubagentInfo {
     pub messages: Vec<SubagentMessage>,
 }
 
+/// A single message in a subagent's conversation.
 #[derive(Clone, Debug)]
 pub struct SubagentMessage {
     pub role: String,
     pub content: String,
 }
 
+/// Dialog that shows the conversation history of a subagent with scroll support.
 pub struct SubagentDialog {
     pub subagent: Option<SubagentInfo>,
     pub open: bool,
@@ -30,6 +35,7 @@ pub struct SubagentDialog {
 }
 
 impl SubagentDialog {
+    /// Creates a new, closed subagent dialog with no content.
     pub fn new() -> Self {
         Self {
             subagent: None,
@@ -38,33 +44,39 @@ impl SubagentDialog {
         }
     }
 
+    /// Opens the dialog displaying the given subagent's conversation.
     pub fn open(&mut self, subagent: SubagentInfo) {
         self.subagent = Some(subagent);
         self.open = true;
         self.scroll_offset = 0;
     }
 
+    /// Closes the dialog and clears the subagent data.
     pub fn close(&mut self) {
         self.open = false;
         self.subagent = None;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Scrolls the content view up by one line.
     pub fn scroll_up(&mut self) {
         if self.scroll_offset > 0 {
             self.scroll_offset -= 1;
         }
     }
 
+    /// Scrolls the content view down by one line, clamped to `max`.
     pub fn scroll_down(&mut self, max: u16) {
         if self.scroll_offset < max {
             self.scroll_offset += 1;
         }
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

@@ -1,3 +1,4 @@
+//! Tool for discovering and loading SKILL.md expertise modules from the filesystem.
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,8 +9,10 @@ use walkdir::WalkDir;
 use crate::{PermissionRequest, Tool, ToolContext, ToolError, ToolResult};
 use kfcode_config::load_config;
 
+/// Loads and injects a named skill's content into the agent context.
 pub struct SkillTool;
 
+/// Deserialized input for a skill invocation.
 #[derive(Debug, Serialize, Deserialize)]
 struct SkillInput {
     #[serde(rename = "skill_name")]
@@ -20,6 +23,7 @@ struct SkillInput {
     prompt: Option<String>,
 }
 
+/// Metadata parsed from a discovered SKILL.md file.
 #[derive(Debug, Clone)]
 struct SkillInfo {
     name: String,
@@ -353,6 +357,7 @@ impl Default for SkillTool {
     }
 }
 
+/// Returns the name/description pairs for all skills discoverable from the current directory.
 pub fn list_available_skills() -> Vec<(String, String)> {
     let base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     discover_skills(&base)

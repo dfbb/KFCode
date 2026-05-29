@@ -1,3 +1,4 @@
+//! LLM streaming, stream processing, cost computation, and tool utilities.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,6 +24,7 @@ pub const OUTPUT_TOKEN_MAX: u64 = 8192;
 /// trigger a permission ask.
 const DOOM_LOOP_THRESHOLD: usize = 3;
 
+/// Configuration for an LLM agent, including its name, system prompt, and sampling parameters.
 #[derive(Debug, Clone)]
 pub struct LlmAgent {
     pub name: String,
@@ -32,12 +34,14 @@ pub struct LlmAgent {
     pub max_tokens: Option<u64>,
 }
 
+/// A reference to a provider/model pair used to route a stream request.
 #[derive(Debug, Clone)]
 pub struct LlmModelRef {
     pub model_id: String,
     pub provider_id: String,
 }
 
+/// All inputs required to start a streaming LLM request.
 pub struct StreamInput {
     pub user: MessageInfo,
     pub session_id: String,
@@ -83,6 +87,7 @@ pub enum ToolChoice {
     None,
 }
 
+/// The output of a streaming LLM request: a channel of `StreamEvent`s.
 pub struct StreamOutput {
     pub events: tokio::sync::mpsc::Receiver<StreamEvent>,
 }
@@ -105,6 +110,7 @@ pub enum ProcessResult {
 /// Additional processor-side signals to be consumed by callers (e.g. permission flow).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcessorEvent {
+    /// Emitted when the last `DOOM_LOOP_THRESHOLD` tool calls are identical.
     DoomLoopDetected {
         tool_name: String,
         input: serde_json::Value,
@@ -199,6 +205,7 @@ struct CompletedToolRecord {
     input: serde_json::Value,
 }
 
+/// Entry point for starting raw LLM streams without full state-machine processing.
 pub struct LlmProcessor;
 
 impl StreamProcessor {
@@ -951,6 +958,7 @@ impl LlmProcessor {
         Ok(StreamOutput { events: rx })
     }
 
+    /// Return `true` if any message in the slice contains a tool call or tool result.
     pub fn has_tool_calls(messages: &[Message]) -> bool {
         for msg in messages {
             if let Content::Parts(parts) = &msg.content {
@@ -1416,12 +1424,14 @@ pub fn resolve_tools_with_permissions(
     tools
 }
 
+/// The result of collecting a full stream: final text, tool calls, and finish reason.
 pub struct StreamResult {
     pub text: String,
     pub tool_calls: Vec<ToolCallResult>,
     pub finish_reason: Option<String>,
 }
 
+/// A fully assembled tool call from a collected stream.
 #[derive(Debug, Clone)]
 pub struct ToolCallResult {
     pub id: String,
@@ -1429,6 +1439,7 @@ pub struct ToolCallResult {
     pub input: serde_json::Value,
 }
 
+/// Collect a `StreamOutput` into a `StreamResult`, accumulating text and tool calls.
 pub async fn collect_stream(
     mut output: StreamOutput,
     abort: tokio_util::sync::CancellationToken,
@@ -1531,6 +1542,7 @@ pub async fn notify_text_complete(session_id: &str, text: &str) {
     }
 }
 
+/// Convert a slice of `MessageWithParts` into provider-level messages (simplified, no media handling).
 pub fn to_model_messages(messages: &[MessageWithParts]) -> Vec<Message> {
     messages
         .iter()

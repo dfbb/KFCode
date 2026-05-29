@@ -1,25 +1,37 @@
+//! Session todo list management with optional database persistence and bus events.
+//!
+//! `TodoManager` maintains an in-memory todo list per session, optionally backed
+//! by a `TodoRepository`, and publishes `todo.updated` events on changes.
+
 use kfcode_core::bus::{Bus, BusEventDef};
 use kfcode_storage::TodoRepository;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// A single todo item with content, status, and priority strings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TodoInfo {
+    /// Text content of the todo item.
     pub content: String,
+    /// Status string (e.g. `"pending"`, `"completed"`).
     pub status: String,
+    /// Priority string (e.g. `"high"`, `"medium"`, `"low"`).
     pub priority: String,
 }
 
+/// Manages per-session todo lists with optional DB persistence and bus publishing.
 pub struct TodoManager {
     state: Arc<RwLock<HashMap<String, Vec<TodoInfo>>>>,
     db: Option<Arc<TodoRepository>>,
     bus: Option<Arc<Bus>>,
 }
 
+/// Bus event published whenever a session's todo list is updated.
 pub static TODO_UPDATED_EVENT: BusEventDef = BusEventDef::new("todo.updated");
 
 impl TodoManager {
+    /// Create an in-memory-only manager with no database or bus.
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(HashMap::new())),
@@ -28,6 +40,7 @@ impl TodoManager {
         }
     }
 
+    /// Create a manager backed by a SQLite database pool.
     pub fn with_database(pool: sqlx::SqlitePool) -> Self {
         Self {
             state: Arc::new(RwLock::new(HashMap::new())),
@@ -36,6 +49,7 @@ impl TodoManager {
         }
     }
 
+    /// Create a manager that publishes `todo.updated` events on the given bus.
     pub fn with_bus(bus: Arc<Bus>) -> Self {
         Self {
             state: Arc::new(RwLock::new(HashMap::new())),
@@ -44,6 +58,7 @@ impl TodoManager {
         }
     }
 
+    /// Replace the todo list for `session_id`, persisting to DB and publishing an event.
     pub async fn update(&self, session_id: &str, todos: Vec<TodoInfo>) {
         let todos_payload = todos.clone();
         if let Some(ref db) = self.db {
@@ -79,6 +94,7 @@ impl TodoManager {
         }
     }
 
+    /// Return the current todo list for `session_id`, reading from DB if available.
     pub async fn get(&self, session_id: &str) -> Vec<TodoInfo> {
         if let Some(ref db) = self.db {
             if let Ok(items) = db.list_for_session(session_id).await {
@@ -97,6 +113,7 @@ impl TodoManager {
         state.get(session_id).cloned().unwrap_or_default()
     }
 
+    /// Remove all todos for `session_id` from memory and the database.
     pub async fn clear(&self, session_id: &str) {
         if let Some(ref db) = self.db {
             let _ = db.delete_for_session(session_id).await;
@@ -106,6 +123,7 @@ impl TodoManager {
         state.remove(session_id);
     }
 
+    /// Update the status of a single todo item by index; returns false if out of bounds.
     pub async fn set_status(&self, session_id: &str, index: usize, status: &str) -> bool {
         let mut state = self.state.write().await;
         if let Some(todos) = state.get_mut(session_id) {
@@ -129,6 +147,7 @@ impl TodoManager {
         false
     }
 
+    /// Append a new todo item to the list for `session_id`.
     pub async fn add(&self, session_id: &str, todo: TodoInfo) {
         let mut state = self.state.write().await;
         let todos = state.entry(session_id.to_string()).or_insert_with(Vec::new);
@@ -147,6 +166,7 @@ impl TodoManager {
         }
     }
 
+    /// Remove a todo item by index; returns false if out of bounds.
     pub async fn remove(&self, session_id: &str, index: usize) -> bool {
         let mut state = self.state.write().await;
         if let Some(todos) = state.get_mut(session_id) {
@@ -203,15 +223,21 @@ mod tests {
     }
 }
 
+/// Typed todo status values.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum TodoStatus {
+    /// Item has not been started.
     Pending,
+    /// Item is currently being worked on.
     InProgress,
+    /// Item has been finished.
     Completed,
+    /// Item was abandoned.
     Cancelled,
 }
 
 impl TodoStatus {
+    /// Return the canonical lowercase string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
             TodoStatus::Pending => "pending",
@@ -228,14 +254,19 @@ impl std::fmt::Display for TodoStatus {
     }
 }
 
+/// Typed todo priority values.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum TodoPriority {
+    /// Highest urgency.
     High,
+    /// Normal urgency.
     Medium,
+    /// Lowest urgency.
     Low,
 }
 
 impl TodoPriority {
+    /// Return the canonical lowercase string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
             TodoPriority::High => "high",
@@ -251,6 +282,7 @@ impl std::fmt::Display for TodoPriority {
     }
 }
 
+/// Parse a status string into a `TodoStatus`, defaulting to `Pending` for unknown values.
 pub fn parse_status(status: &str) -> TodoStatus {
     match status.to_lowercase().as_str() {
         "pending" => TodoStatus::Pending,
@@ -261,6 +293,7 @@ pub fn parse_status(status: &str) -> TodoStatus {
     }
 }
 
+/// Parse a priority string into a `TodoPriority`, defaulting to `Medium` for unknown values.
 pub fn parse_priority(priority: &str) -> TodoPriority {
     match priority.to_lowercase().as_str() {
         "high" => TodoPriority::High,

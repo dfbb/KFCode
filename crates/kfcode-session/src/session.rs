@@ -1,3 +1,4 @@
+//! Session data model, state management, and event publishing.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,18 +14,29 @@ use crate::{MessagePart, MessageRole, SessionMessage};
 // Bus Event Definitions (matches TS Session.Event)
 // ============================================================================
 
+/// Bus event fired when a session is created.
 pub static SESSION_CREATED_EVENT: BusEventDef = BusEventDef::new("session.created");
+/// Bus event fired when a session is updated.
 pub static SESSION_UPDATED_EVENT: BusEventDef = BusEventDef::new("session.updated");
+/// Bus event fired when a session is deleted.
 pub static SESSION_DELETED_EVENT: BusEventDef = BusEventDef::new("session.deleted");
+/// Bus event fired when file diffs are computed for a session.
 pub static SESSION_DIFF_EVENT: BusEventDef = BusEventDef::new("session.diff");
+/// Bus event fired when a session-level error occurs.
 pub static SESSION_ERROR_EVENT: BusEventDef = BusEventDef::new("session.error");
 
 // Message-level events (matches TS MessageV2.Event)
+/// Bus event fired when a message is created or updated.
 pub static MESSAGE_UPDATED_EVENT: BusEventDef = BusEventDef::new("message.updated");
+/// Bus event fired when a message is removed.
 pub static MESSAGE_REMOVED_EVENT: BusEventDef = BusEventDef::new("message.removed");
+/// Bus event fired when a message part is created or updated.
 pub static PART_UPDATED_EVENT: BusEventDef = BusEventDef::new("message.part.updated");
+/// Bus event fired when a message part is removed.
 pub static PART_REMOVED_EVENT: BusEventDef = BusEventDef::new("message.part.removed");
+/// Bus event fired for streaming text deltas on a message part.
 pub static PART_DELTA_EVENT: BusEventDef = BusEventDef::new("message.part.delta");
+/// Bus event fired when a slash command is executed.
 pub static COMMAND_EXECUTED_EVENT: BusEventDef = BusEventDef::new("command.executed");
 
 // ============================================================================
@@ -116,6 +128,7 @@ pub struct SessionUsage {
 // Session Event Types
 // ============================================================================
 
+/// Events emitted by the session system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SessionEvent {
@@ -139,6 +152,7 @@ pub enum SessionEvent {
     },
 }
 
+/// A serializable error payload attached to a session error event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionError {
     pub code: String,
@@ -151,6 +165,7 @@ pub struct SessionError {
 // Session Status
 // ============================================================================
 
+/// The lifecycle status of a session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SessionStatus {
     Active,
@@ -165,6 +180,7 @@ impl Default for SessionStatus {
     }
 }
 
+/// The run status of a session's LLM processing loop.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RunStatus {
     Idle,
@@ -185,6 +201,7 @@ impl Default for RunStatus {
     }
 }
 
+/// Events emitted by the session state manager when run status changes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SessionStateEvent {
     StatusChanged {
@@ -197,25 +214,30 @@ pub enum SessionStateEvent {
     },
 }
 
+/// Tracks the run status of all active sessions.
 pub struct SessionStateManager {
     states: HashMap<String, RunStatus>,
 }
 
 impl SessionStateManager {
+    /// Create a new empty state manager.
     pub fn new() -> Self {
         Self {
             states: HashMap::new(),
         }
     }
 
+    /// Set the run status for a session.
     pub fn set(&mut self, session_id: &str, status: RunStatus) {
         self.states.insert(session_id.to_string(), status);
     }
 
+    /// Get the run status for a session, defaulting to `Idle`.
     pub fn get(&self, session_id: &str) -> RunStatus {
         self.states.get(session_id).cloned().unwrap_or_default()
     }
 
+    /// Return `true` if the session is currently busy or retrying.
     pub fn is_busy(&self, session_id: &str) -> bool {
         matches!(
             self.get(session_id),
@@ -223,6 +245,7 @@ impl SessionStateManager {
         )
     }
 
+    /// Return `Err(BusyError)` if the session is currently busy.
     pub fn assert_not_busy(&self, session_id: &str) -> Result<(), BusyError> {
         if self.is_busy(session_id) {
             return Err(BusyError {
@@ -232,10 +255,12 @@ impl SessionStateManager {
         Ok(())
     }
 
+    /// Mark a session as busy.
     pub fn set_busy(&mut self, session_id: &str) {
         self.set(session_id, RunStatus::Busy);
     }
 
+    /// Mark a session as retrying with the given attempt count, message, and next-retry timestamp.
     pub fn set_retrying(&mut self, session_id: &str, attempt: u32, message: String, next: i64) {
         self.set(
             session_id,
@@ -247,14 +272,17 @@ impl SessionStateManager {
         );
     }
 
+    /// Mark a session as idle.
     pub fn set_idle(&mut self, session_id: &str) {
         self.set(session_id, RunStatus::Idle);
     }
 
+    /// Remove the tracked state for a session.
     pub fn remove(&mut self, session_id: &str) {
         self.states.remove(session_id);
     }
 
+    /// Return the IDs of all sessions that are currently busy or retrying.
     pub fn busy_sessions(&self) -> Vec<&str> {
         self.states
             .iter()
@@ -280,6 +308,7 @@ impl Default for SessionStateManager {
 // Session
 // ============================================================================
 
+/// A conversation session, holding messages, metadata, and lifecycle state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -749,6 +778,7 @@ pub struct SessionRow {
 // Session Manager
 // ============================================================================
 
+/// In-memory store for all sessions, with optional Bus event publishing.
 pub struct SessionManager {
     sessions: HashMap<String, Session>,
     events: Vec<SessionEvent>,
@@ -756,6 +786,7 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
+    /// Create a new session manager without a Bus.
     pub fn new() -> Self {
         Self {
             sessions: HashMap::new(),
@@ -1019,22 +1050,22 @@ impl SessionManager {
         );
     }
 
-    /// Get a session by ID
+    /// Get a session by ID.
     pub fn get(&self, id: &str) -> Option<&Session> {
         self.sessions.get(id)
     }
 
-    /// Get a mutable session by ID
+    /// Get a mutable session by ID.
     pub fn get_mut(&mut self, id: &str) -> Option<&mut Session> {
         self.sessions.get_mut(id)
     }
 
-    /// List all sessions
+    /// List all sessions.
     pub fn list(&self) -> Vec<&Session> {
         self.sessions.values().collect()
     }
 
-    /// List sessions with filters
+    /// List sessions matching the given filter criteria.
     pub fn list_filtered(&self, filter: SessionFilter) -> Vec<&Session> {
         self.sessions
             .values()
@@ -1062,7 +1093,7 @@ impl SessionManager {
             .collect()
     }
 
-    /// Get children of a session
+    /// Return all direct children of the given session.
     pub fn children(&self, parent_id: &str) -> Vec<&Session> {
         self.sessions
             .values()
@@ -1070,7 +1101,7 @@ impl SessionManager {
             .collect()
     }
 
-    /// Delete a session
+    /// Delete a session and all its children, publishing a deleted event.
     pub fn delete(&mut self, id: &str) -> Option<Session> {
         let children: Vec<String> = self.children(id).iter().map(|s| s.id.clone()).collect();
         for child_id in children {
@@ -1099,7 +1130,7 @@ impl SessionManager {
         Some(session)
     }
 
-    /// Update a session
+    /// Replace or insert a session and publish an updated event.
     pub fn update(&mut self, session: Session) {
         let id = session.id.clone();
         self.sessions.insert(id, session.clone());
@@ -1109,12 +1140,12 @@ impl SessionManager {
         self.publish_session_event(&SESSION_UPDATED_EVENT, &session);
     }
 
-    /// Get events (and clear them)
+    /// Drain and return all queued session events.
     pub fn drain_events(&mut self) -> Vec<SessionEvent> {
         self.events.drain(..).collect()
     }
 
-    /// Get session count
+    /// Return the total number of tracked sessions.
     pub fn count(&self) -> usize {
         self.sessions.len()
     }
@@ -1214,7 +1245,7 @@ impl SessionManager {
     }
 }
 
-/// Filter options for listing sessions
+/// Filter options for listing sessions.
 #[derive(Debug, Clone, Default)]
 pub struct SessionFilter {
     pub directory: Option<String>,
@@ -1228,6 +1259,7 @@ pub struct SessionFilter {
 // Busy Error
 // ============================================================================
 
+/// Error returned when an operation is attempted on a busy session.
 #[derive(Debug, Clone)]
 pub struct BusyError {
     pub session_id: String,

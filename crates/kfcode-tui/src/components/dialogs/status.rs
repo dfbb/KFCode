@@ -1,3 +1,5 @@
+//! Dialog for displaying structured application status information.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,16 +10,24 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Visual style applied to a status line.
 #[derive(Clone, Debug)]
 pub enum StatusLineKind {
+    /// Section heading rendered in the primary color.
     Title,
+    /// Regular text.
     Normal,
+    /// De-emphasized text.
     Muted,
+    /// Success-colored text.
     Success,
+    /// Warning-colored text.
     Warning,
+    /// Error-colored text.
     Error,
 }
 
+/// A single line of text with an associated display style.
 #[derive(Clone, Debug)]
 pub struct StatusLine {
     pub text: String,
@@ -25,6 +35,7 @@ pub struct StatusLine {
 }
 
 impl StatusLine {
+    /// Creates a title-styled status line.
     pub fn title(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -32,6 +43,7 @@ impl StatusLine {
         }
     }
 
+    /// Creates a normal-styled status line.
     pub fn normal(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -39,6 +51,7 @@ impl StatusLine {
         }
     }
 
+    /// Creates a muted-styled status line.
     pub fn muted(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -46,6 +59,7 @@ impl StatusLine {
         }
     }
 
+    /// Creates a success-styled status line.
     pub fn success(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -53,6 +67,7 @@ impl StatusLine {
         }
     }
 
+    /// Creates a warning-styled status line.
     pub fn warning(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -60,6 +75,7 @@ impl StatusLine {
         }
     }
 
+    /// Creates an error-styled status line.
     pub fn error(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -68,12 +84,14 @@ impl StatusLine {
     }
 }
 
+/// Dialog that renders a scrollable list of styled status lines.
 pub struct StatusDialog {
     lines: Vec<StatusLine>,
     open: bool,
 }
 
 impl StatusDialog {
+    /// Creates a new, closed status dialog with no lines.
     pub fn new() -> Self {
         Self {
             lines: Vec::new(),
@@ -81,26 +99,32 @@ impl StatusDialog {
         }
     }
 
+    /// Replaces the displayed lines with plain strings rendered as normal-styled lines.
     pub fn set_lines(&mut self, lines: Vec<String>) {
         self.lines = lines.into_iter().map(StatusLine::normal).collect();
     }
 
+    /// Replaces the displayed lines with pre-styled `StatusLine` values.
     pub fn set_status_lines(&mut self, lines: Vec<StatusLine>) {
         self.lines = lines;
     }
 
+    /// Makes the dialog visible.
     pub fn open(&mut self) {
         self.open = true;
     }
 
+    /// Hides the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

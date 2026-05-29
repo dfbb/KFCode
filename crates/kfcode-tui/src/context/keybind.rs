@@ -1,9 +1,12 @@
+//! Keybinding registry and leader-key state machine.
+
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 const LEADER_TIMEOUT_MS: u64 = 2000;
 
+/// Tracks whether a leader key (Ctrl+X) is active and handles its timeout.
 pub struct LeaderKeyState {
     pub active: bool,
     pub start_time: Option<Instant>,
@@ -11,6 +14,7 @@ pub struct LeaderKeyState {
 }
 
 impl LeaderKeyState {
+    /// Create an inactive leader state.
     pub fn new() -> Self {
         Self {
             active: false,
@@ -19,12 +23,14 @@ impl LeaderKeyState {
         }
     }
 
+    /// Activate the leader sequence, recording the triggering key and start time.
     pub fn start(&mut self, key: KeyCode) {
         self.active = true;
         self.start_time = Some(Instant::now());
         self.leader_key = Some(key);
     }
 
+    /// Return `true` and reset if the leader sequence has timed out.
     pub fn check_timeout(&mut self) -> bool {
         if let Some(start) = self.start_time {
             if start.elapsed() > Duration::from_millis(LEADER_TIMEOUT_MS) {
@@ -35,6 +41,7 @@ impl LeaderKeyState {
         false
     }
 
+    /// Deactivate the leader sequence.
     pub fn reset(&mut self) {
         self.active = false;
         self.start_time = None;
@@ -48,6 +55,7 @@ impl Default for LeaderKeyState {
     }
 }
 
+/// A single key binding: a key code plus optional modifier flags.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Keybind {
     pub code: KeyCode,
@@ -55,10 +63,12 @@ pub struct Keybind {
 }
 
 impl Keybind {
+    /// Create a keybind with explicit code and modifiers.
     pub fn new(code: KeyCode, modifiers: KeyModifiers) -> Self {
         Self { code, modifiers }
     }
 
+    /// Create a keybind with no modifiers.
     pub fn key(code: KeyCode) -> Self {
         Self {
             code,
@@ -66,6 +76,7 @@ impl Keybind {
         }
     }
 
+    /// Create a Ctrl+key binding.
     pub fn ctrl(code: KeyCode) -> Self {
         Self {
             code,

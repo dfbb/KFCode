@@ -1,3 +1,5 @@
+//! Session view: scrollable message list with optional sidebar overlay.
+
 use chrono::Utc;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -32,6 +34,7 @@ struct ThinkingToggleHit {
     reasoning_id: String,
 }
 
+/// The main session view that renders messages, header, prompt, and optional sidebar.
 pub struct SessionView {
     context: Arc<AppContext>,
     session_id: String,
@@ -49,6 +52,7 @@ pub struct SessionView {
 }
 
 impl SessionView {
+    /// Create a new session view for the given session ID.
     pub fn new(context: Arc<AppContext>, session_id: String) -> Self {
         Self {
             context,
@@ -67,6 +71,7 @@ impl SessionView {
         }
     }
 
+    /// Render the full session view including messages, prompt, and sidebar.
     pub fn render(&mut self, frame: &mut Frame, area: Rect, prompt: &Prompt) {
         let show_sidebar = *self.context.show_sidebar.read();
         let sidebar_mode = self.context.sidebar_mode.read().clone();
@@ -898,6 +903,7 @@ impl SessionView {
         }
     }
 
+    /// Handle a mouse click in the message area; returns true if a thinking block was toggled.
     pub fn handle_click(&mut self, col: u16, row: u16) -> bool {
         let Some(area) = self.last_messages_area else {
             return false;
@@ -928,6 +934,7 @@ impl SessionView {
         true
     }
 
+    /// Handle a mouse click that may target the sidebar open/close buttons or sidebar content.
     pub fn handle_sidebar_click(&mut self, col: u16, row: u16) -> bool {
         if point_in_optional_rect(self.sidebar_open_button_area, col, row) {
             *self.context.show_sidebar.write() = true;
@@ -942,24 +949,29 @@ impl SessionView {
         self.sidebar_state.handle_click(col, row)
     }
 
+    /// Returns true if the given point falls within the sidebar overlay area.
     pub fn is_point_in_sidebar(&self, col: u16, row: u16) -> bool {
         self.sidebar_state.contains_sidebar_point(col, row)
     }
 
+    /// Scroll the sidebar up if the point is within the sidebar area.
     pub fn scroll_sidebar_up_at(&mut self, col: u16, row: u16) -> bool {
         self.sidebar_state.scroll_up_at(col, row)
     }
 
+    /// Scroll the sidebar down if the point is within the sidebar area.
     pub fn scroll_sidebar_down_at(&mut self, col: u16, row: u16) -> bool {
         self.sidebar_state.scroll_down_at(col, row)
     }
 
+    /// Scroll the message list up by one line.
     pub fn scroll_up(&mut self) {
         if self.scroll_offset > 0 {
             self.scroll_offset -= 1;
         }
     }
 
+    /// Scroll the message list down by one line.
     pub fn scroll_down(&mut self) {
         let max_scroll = self.max_scroll_offset();
         if self.scroll_offset < max_scroll {
@@ -967,36 +979,43 @@ impl SessionView {
         }
     }
 
+    /// Scroll the message list up by the given number of lines.
     pub fn scroll_up_by(&mut self, lines: usize) {
         let lines = lines.max(1);
         self.scroll_offset = self.scroll_offset.saturating_sub(lines);
     }
 
+    /// Scroll the message list down by the given number of lines.
     pub fn scroll_down_by(&mut self, lines: usize) {
         let lines = lines.max(1);
         let max_scroll = self.max_scroll_offset();
         self.scroll_offset = self.scroll_offset.saturating_add(lines).min(max_scroll);
     }
 
+    /// Scroll up by the mouse wheel step.
     pub fn scroll_up_mouse(&mut self) {
         self.scroll_up_by(MOUSE_SCROLL_LINES);
     }
 
+    /// Scroll down by the mouse wheel step.
     pub fn scroll_down_mouse(&mut self) {
         self.scroll_down_by(MOUSE_SCROLL_LINES);
     }
 
+    /// Scroll up by one viewport page.
     pub fn scroll_page_up(&mut self) {
         let step = self.messages_viewport_height.saturating_sub(1).max(1);
         self.scroll_offset = self.scroll_offset.saturating_sub(step);
     }
 
+    /// Scroll down by one viewport page.
     pub fn scroll_page_down(&mut self) {
         let step = self.messages_viewport_height.saturating_sub(1).max(1);
         let max_scroll = self.max_scroll_offset();
         self.scroll_offset = (self.scroll_offset + step).min(max_scroll);
     }
 
+    /// Scroll the view so the given message is at the top.
     pub fn scroll_to_message(&mut self, message_id: &str) {
         if let Some(first_line) = self.message_first_lines.get(message_id).copied() {
             self.scroll_offset = first_line.min(self.max_scroll_offset());

@@ -1,3 +1,5 @@
+//! Dialog for exporting a session to a file with configurable options.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Dialog that collects an output filename and export options before writing a session transcript.
 pub struct SessionExportDialog {
     open: bool,
     session_id: Option<String>,
@@ -18,6 +21,7 @@ pub struct SessionExportDialog {
 }
 
 impl SessionExportDialog {
+    /// Creates a new, closed export dialog with default option values.
     pub fn new() -> Self {
         Self {
             open: false,
@@ -29,22 +33,26 @@ impl SessionExportDialog {
         }
     }
 
+    /// Opens the dialog for the given session with a suggested output filename.
     pub fn open(&mut self, session_id: String, default_filename: String) {
         self.open = true;
         self.session_id = Some(session_id);
         self.filename = default_filename;
     }
 
+    /// Closes the dialog and clears the session ID and filename.
     pub fn close(&mut self) {
         self.open = false;
         self.session_id = None;
         self.filename.clear();
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Handles a character input: digits 1-3 toggle export options; other characters append to the filename.
     pub fn handle_input(&mut self, c: char) {
         match c {
             '1' => self.include_thinking = !self.include_thinking,
@@ -54,18 +62,22 @@ impl SessionExportDialog {
         }
     }
 
+    /// Removes the last character from the filename input.
     pub fn handle_backspace(&mut self) {
         self.filename.pop();
     }
 
+    /// Returns the session ID associated with this export, if set.
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
     }
 
+    /// Returns the current output filename.
     pub fn filename(&self) -> &str {
         &self.filename
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

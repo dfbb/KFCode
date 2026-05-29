@@ -1,3 +1,5 @@
+//! Sidebar overlay showing session info, MCP/LSP status, todos, and file diffs.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -16,6 +18,7 @@ use crate::context::{
 use crate::theme::Theme;
 use crate::branding::{APP_NAME, APP_SHORT_NAME, APP_VERSION_DATE};
 
+/// The sidebar widget that renders session metadata and tool status.
 pub struct Sidebar {
     context: Arc<AppContext>,
     session_id: String,
@@ -27,6 +30,7 @@ struct SidebarToggleHit {
     section_key: &'static str,
 }
 
+/// Mutable render state for the sidebar (scroll position, collapsed sections, hit areas).
 #[derive(Default)]
 pub struct SidebarState {
     collapsed_sections: HashMap<&'static str, bool>,
@@ -39,6 +43,7 @@ pub struct SidebarState {
 }
 
 impl SidebarState {
+    /// Reset all state when the sidebar is hidden.
     pub fn reset_hidden(&mut self) {
         self.sidebar_area = None;
         self.sections_area = None;
@@ -65,10 +70,12 @@ impl SidebarState {
         self.clamp_scroll();
     }
 
+    /// Returns true if the given point is within the sidebar area.
     pub fn contains_sidebar_point(&self, col: u16, row: u16) -> bool {
         contains_point(self.sidebar_area, col, row)
     }
 
+    /// Handle a mouse click, toggling the section under the cursor; returns true if handled.
     pub fn handle_click(&mut self, col: u16, row: u16) -> bool {
         let Some(area) = self.sections_area else {
             return false;
@@ -93,6 +100,7 @@ impl SidebarState {
         true
     }
 
+    /// Scroll the sidebar up if the point is within the sidebar area.
     pub fn scroll_up_at(&mut self, col: u16, row: u16) -> bool {
         if !self.contains_sidebar_point(col, row) {
             return false;
@@ -101,6 +109,7 @@ impl SidebarState {
         true
     }
 
+    /// Scroll the sidebar down if the point is within the sidebar area.
     pub fn scroll_down_at(&mut self, col: u16, row: u16) -> bool {
         if !self.contains_sidebar_point(col, row) {
             return false;
@@ -150,6 +159,7 @@ struct SidebarSection {
 }
 
 impl Sidebar {
+    /// Create a sidebar for the given session.
     pub fn new(context: Arc<AppContext>, session_id: String) -> Self {
         Self {
             context,
@@ -157,6 +167,7 @@ impl Sidebar {
         }
     }
 
+    /// Render the sidebar into the given area, updating mutable state.
     pub fn render(&self, frame: &mut Frame, area: Rect, state: &mut SidebarState, floating: bool) {
         if area.width == 0 || area.height == 0 {
             state.reset_hidden();

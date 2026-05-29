@@ -1,3 +1,5 @@
+//! Standalone dialog for renaming a session.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Dialog that presents a single text input for renaming a session.
 pub struct SessionRenameDialog {
     open: bool,
     session_id: Option<String>,
@@ -15,6 +18,7 @@ pub struct SessionRenameDialog {
 }
 
 impl SessionRenameDialog {
+    /// Creates a new, closed rename dialog.
     pub fn new() -> Self {
         Self {
             open: false,
@@ -23,30 +27,36 @@ impl SessionRenameDialog {
         }
     }
 
+    /// Opens the dialog pre-filled with the session's current title.
     pub fn open(&mut self, session_id: String, title: String) {
         self.open = true;
         self.session_id = Some(session_id);
         self.input = title;
     }
 
+    /// Closes the dialog and clears the input.
     pub fn close(&mut self) {
         self.open = false;
         self.session_id = None;
         self.input.clear();
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Appends a character to the title input.
     pub fn handle_input(&mut self, c: char) {
         self.input.push(c);
     }
 
+    /// Removes the last character from the title input.
     pub fn handle_backspace(&mut self) {
         self.input.pop();
     }
 
+    /// Confirms the rename and returns `(session_id, new_title)`, or `None` if the title is empty.
     pub fn confirm(&mut self) -> Option<(String, String)> {
         let session_id = self.session_id.clone()?;
         let title = self.input.trim().to_string();
@@ -57,6 +67,7 @@ impl SessionRenameDialog {
         Some((session_id, title))
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

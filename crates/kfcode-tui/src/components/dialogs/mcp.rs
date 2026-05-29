@@ -1,3 +1,5 @@
+//! Dialog for viewing and managing MCP server connections.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Status snapshot for a single MCP server.
 #[derive(Clone, Debug)]
 pub struct McpItem {
     pub name: String,
@@ -17,6 +20,7 @@ pub struct McpItem {
     pub error: Option<String>,
 }
 
+/// Dialog that lists MCP servers with their connection status.
 pub struct McpDialog {
     items: Vec<McpItem>,
     state: ListState,
@@ -24,6 +28,7 @@ pub struct McpDialog {
 }
 
 impl McpDialog {
+    /// Creates a new, closed MCP dialog with an empty server list.
     pub fn new() -> Self {
         let mut state = ListState::default();
         state.select(Some(0));
@@ -34,6 +39,7 @@ impl McpDialog {
         }
     }
 
+    /// Replaces the server list, sorting entries by name.
     pub fn set_items(&mut self, mut items: Vec<McpItem>) {
         items.sort_by(|a, b| a.name.cmp(&b.name));
         self.items = items;
@@ -41,6 +47,7 @@ impl McpDialog {
             .select(if self.items.is_empty() { None } else { Some(0) });
     }
 
+    /// Makes the dialog visible.
     pub fn open(&mut self) {
         self.open = true;
         if self.items.is_empty() {
@@ -50,14 +57,17 @@ impl McpDialog {
         }
     }
 
+    /// Hides the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -66,6 +76,7 @@ impl McpDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.items.len().saturating_sub(1) {
@@ -74,6 +85,7 @@ impl McpDialog {
         }
     }
 
+    /// Returns a clone of the currently highlighted server item, if any.
     pub fn selected_item(&self) -> Option<McpItem> {
         self.state
             .selected()
@@ -81,6 +93,7 @@ impl McpDialog {
             .cloned()
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

@@ -1,3 +1,4 @@
+//! Tool for searching the web via the Exa AI MCP endpoint.
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -7,11 +8,13 @@ use crate::{Tool, ToolContext, ToolError, ToolResult};
 const API_BASE_URL: &str = "https://mcp.exa.ai";
 const DEFAULT_NUM_RESULTS: usize = 8;
 
+/// Searches the web using the Exa AI MCP API and returns relevant page content.
 pub struct WebSearchTool {
     client: Client,
 }
 
 impl WebSearchTool {
+    /// Creates a `WebSearchTool` with a 30-second HTTP timeout.
     pub fn new() -> Self {
         Self {
             client: Client::builder()
@@ -22,6 +25,7 @@ impl WebSearchTool {
     }
 }
 
+/// Deserialized input for a web-search request.
 #[derive(Debug, Serialize, Deserialize)]
 struct WebSearchInput {
     query: String,
@@ -39,6 +43,7 @@ fn default_num_results() -> usize {
     DEFAULT_NUM_RESULTS
 }
 
+/// JSON-RPC 2.0 request envelope sent to the Exa MCP endpoint.
 #[derive(Debug, Serialize)]
 struct McpSearchRequest {
     jsonrpc: String,
@@ -47,12 +52,14 @@ struct McpSearchRequest {
     params: McpSearchParams,
 }
 
+/// Parameters block within the MCP search request.
 #[derive(Debug, Serialize)]
 struct McpSearchParams {
     name: String,
     arguments: McpSearchArguments,
 }
 
+/// Search arguments forwarded to the Exa search tool.
 #[derive(Debug, Serialize)]
 struct McpSearchArguments {
     query: String,
@@ -68,16 +75,19 @@ struct McpSearchArguments {
     context_max_characters: Option<usize>,
 }
 
+/// Top-level JSON-RPC response from the Exa MCP endpoint.
 #[derive(Debug, Deserialize)]
 struct McpSearchResponse {
     result: McpSearchResult,
 }
 
+/// The `result` field of an MCP search response.
 #[derive(Debug, Deserialize)]
 struct McpSearchResult {
     content: Vec<McpContent>,
 }
 
+/// A single content item returned by the MCP search endpoint.
 #[derive(Debug, Deserialize)]
 struct McpContent {
     #[serde(rename = "type")]

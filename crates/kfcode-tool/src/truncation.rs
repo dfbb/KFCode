@@ -1,3 +1,4 @@
+//! Utilities for truncating large command output and saving the full content to disk.
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -8,6 +9,7 @@ pub const MAX_LINES: usize = 2000;
 pub const MAX_BYTES: usize = 50 * 1024;
 pub const CLEANUP_RETENTION_DAYS: u64 = 7;
 
+/// Describes the outcome of a truncation operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TruncationResult {
     pub truncated: bool,
@@ -18,9 +20,11 @@ pub struct TruncationResult {
     pub saved_to: Option<PathBuf>,
 }
 
+/// Namespace for output-truncation helpers.
 pub struct Truncate;
 
 impl Truncate {
+    /// Truncates `content` to fit within `MAX_LINES`/`MAX_BYTES`, saving the tail to `save_dir`.
     pub async fn output(content: &str, save_dir: &Path) -> std::io::Result<TruncationResult> {
         let original_bytes = content.len();
         let original_lines = content.lines().count();
@@ -86,6 +90,7 @@ impl Truncate {
         Ok(filepath)
     }
 
+    /// Deletes truncation files in `save_dir` that are older than `CLEANUP_RETENTION_DAYS`.
     pub async fn cleanup(save_dir: &Path) -> std::io::Result<usize> {
         if !save_dir.exists() {
             return Ok(0);

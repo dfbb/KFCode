@@ -1,3 +1,5 @@
+//! Post-render semantic highlighting pass for shell commands, paths, errors, and numbers.
+
 use ratatui::{
     style::{Color, Style},
     text::{Line, Span},

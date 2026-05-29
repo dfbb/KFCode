@@ -1,15 +1,22 @@
+//! Tool implementation for handling invalid or unknown tool calls gracefully.
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{Metadata, Tool, ToolContext, ToolError, ToolResult};
 
+/// Parameters describing an invalid tool invocation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvalidParams {
+    /// Name of the tool that was requested but is not valid.
     pub tool_name: String,
+    /// Human-readable explanation of why the call is invalid.
     pub error_message: String,
+    /// The raw arguments that were passed to the invalid tool, if any.
     pub received_args: Option<serde_json::Value>,
 }
 
+/// Tool that handles calls to unknown or invalid tool names.
 pub struct InvalidTool;
 
 #[async_trait]

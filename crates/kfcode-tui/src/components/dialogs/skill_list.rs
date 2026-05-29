@@ -1,3 +1,5 @@
+//! Dialog for browsing and inserting available skill commands.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Dialog that lists skill names and lets the user insert one as a `/skill` command.
 pub struct SkillListDialog {
     skills: Vec<String>,
     filtered: Vec<usize>,
@@ -17,6 +20,7 @@ pub struct SkillListDialog {
 }
 
 impl SkillListDialog {
+    /// Creates a new, closed skill list dialog with no skills loaded.
     pub fn new() -> Self {
         let mut state = ListState::default();
         state.select(Some(0));
@@ -29,6 +33,7 @@ impl SkillListDialog {
         }
     }
 
+    /// Replaces the skill list, sorting and deduplicating entries case-insensitively.
     pub fn set_skills(&mut self, mut skills: Vec<String>) {
         skills.sort_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
         skills.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
@@ -36,30 +41,36 @@ impl SkillListDialog {
         self.filter();
     }
 
+    /// Opens the dialog and clears the search query.
     pub fn open(&mut self) {
         self.open = true;
         self.query.clear();
         self.filter();
     }
 
+    /// Closes the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Appends a character to the search query and re-filters.
     pub fn handle_input(&mut self, c: char) {
         self.query.push(c);
         self.filter();
     }
 
+    /// Removes the last character from the search query and re-filters.
     pub fn handle_backspace(&mut self) {
         self.query.pop();
         self.filter();
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -68,6 +79,7 @@ impl SkillListDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.filtered.len().saturating_sub(1) {
@@ -76,6 +88,7 @@ impl SkillListDialog {
         }
     }
 
+    /// Returns the name of the currently highlighted skill, if any.
     pub fn selected_skill(&self) -> Option<&str> {
         let idx = self.state.selected().and_then(|s| self.filtered.get(s))?;
         self.skills.get(*idx).map(String::as_str)
@@ -97,6 +110,7 @@ impl SkillListDialog {
         });
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

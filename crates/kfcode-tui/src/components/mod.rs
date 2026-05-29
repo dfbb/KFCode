@@ -1,3 +1,5 @@
+//! Public re-exports for all TUI components.
+
 mod dialog;
 mod dialogs;
 mod diff;

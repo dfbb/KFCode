@@ -1,3 +1,5 @@
+//! Dialog for connecting and managing AI provider credentials.
+
 use ratatui::prelude::Stylize;
 use ratatui::{
     layout::Rect,
@@ -9,6 +11,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Metadata for a single AI provider.
 #[derive(Clone, Debug)]
 pub struct Provider {
     pub id: String,
@@ -16,13 +19,18 @@ pub struct Provider {
     pub status: ProviderStatus,
 }
 
+/// Connection state of a provider.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ProviderStatus {
+    /// Provider is reachable and authenticated.
     Connected,
+    /// Provider has no active connection.
     Disconnected,
+    /// Provider encountered an error during connection.
     Error,
 }
 
+/// Dialog that lists providers and allows entering an API key to connect.
 pub struct ProviderDialog {
     pub providers: Vec<Provider>,
     pub state: ListState,
@@ -33,6 +41,7 @@ pub struct ProviderDialog {
 }
 
 impl ProviderDialog {
+    /// Creates a new, closed provider dialog with an empty provider list.
     pub fn new() -> Self {
         Self {
             providers: Vec::new(),
@@ -44,25 +53,30 @@ impl ProviderDialog {
         }
     }
 
+    /// Opens the dialog and selects the first provider.
     pub fn open(&mut self) {
         self.open = true;
         self.state.select(Some(0));
     }
 
+    /// Closes the dialog and clears any in-progress API key input.
     pub fn close(&mut self) {
         self.open = false;
         self.input_mode = false;
         self.api_key_input.clear();
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Replaces the provider list.
     pub fn set_providers(&mut self, providers: Vec<Provider>) {
         self.providers = providers;
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             let new = selected.saturating_sub(1);
@@ -70,6 +84,7 @@ impl ProviderDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             let new = (selected + 1).min(self.providers.len().saturating_sub(1));
@@ -77,10 +92,12 @@ impl ProviderDialog {
         }
     }
 
+    /// Returns a reference to the currently highlighted provider, if any.
     pub fn selected_provider(&self) -> Option<&Provider> {
         self.state.selected().and_then(|i| self.providers.get(i))
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

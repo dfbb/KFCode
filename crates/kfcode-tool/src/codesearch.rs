@@ -1,3 +1,5 @@
+//! Tool implementation for searching code examples and API documentation via the Exa Code API.
+
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -6,10 +8,13 @@ use crate::{Metadata, PermissionRequest, Tool, ToolContext, ToolError, ToolResul
 
 const EXA_MCP_URL: &str = "https://mcp.exa.ai/mcp";
 
+/// Parameters for a code search request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeSearchParams {
+    /// Natural-language query describing the API, library, or concept to search for.
     pub query: String,
+    /// Maximum number of tokens to return in the response (clamped to 1000–50000).
     #[serde(default = "default_tokens")]
     pub tokens_num: u32,
 }
@@ -56,6 +61,7 @@ struct McpContent {
     text: String,
 }
 
+/// Tool that searches for code examples and documentation using the Exa Code API.
 pub struct CodeSearchTool;
 
 #[async_trait]

@@ -1,3 +1,5 @@
+//! In-memory file index with fuzzy search, used for file-path completion in the prompt.
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -8,6 +10,7 @@ use walkdir::{DirEntry, WalkDir};
 const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const DEFAULT_MAX_DEPTH: usize = 8;
 
+/// Cached list of relative file paths under a root directory, refreshed on a timer.
 #[derive(Debug)]
 pub struct FileIndex {
     entries: Vec<String>,
@@ -28,6 +31,8 @@ impl Default for FileIndex {
 }
 
 impl FileIndex {
+    /// Rebuild the index from `root` up to `max_depth` levels deep, skipping common
+    /// build/VCS directories; no-ops if the index is still fresh.
     pub fn refresh(&mut self, root: &Path, max_depth: usize) {
         let depth = max_depth.max(1);
         let root_buf = root.to_path_buf();
@@ -66,6 +71,7 @@ impl FileIndex {
         self.last_refresh = Some(now);
     }
 
+    /// Fuzzy-search the index for `query` and return up to `limit` results with scores.
     pub fn search(&self, query: &str, limit: usize) -> Vec<(String, u32)> {
         if limit == 0 || self.entries.is_empty() {
             return Vec::new();

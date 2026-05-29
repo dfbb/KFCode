@@ -1,8 +1,12 @@
+//! Crossterm terminal initialization and teardown helpers.
+
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::{self, Stdout};
 
+/// Type alias for the ratatui terminal backed by crossterm on stdout.
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 
+/// Enable raw mode, enter the alternate screen, and return a configured `Tui`.
 pub fn init() -> io::Result<Tui> {
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(
@@ -15,6 +19,7 @@ pub fn init() -> io::Result<Tui> {
     Terminal::new(backend)
 }
 
+/// Leave the alternate screen, disable raw mode, and restore the terminal.
 pub fn restore() -> io::Result<()> {
     crossterm::execute!(
         io::stdout(),

@@ -1,9 +1,12 @@
+//! HTTP API client and data transfer types for communicating with the kfcode backend.
+
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Metadata for a single conversation session returned by the server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
     pub id: String,
@@ -18,6 +21,7 @@ pub struct SessionInfo {
     pub revert: Option<SessionRevertInfo>,
 }
 
+/// Timestamps associated with a session's lifecycle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionTimeInfo {
     pub created: i64,
@@ -26,6 +30,7 @@ pub struct SessionTimeInfo {
     pub archived: Option<i64>,
 }
 
+/// Revert checkpoint information attached to a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionRevertInfo {
     pub message_id: String,
@@ -37,6 +42,7 @@ pub struct SessionRevertInfo {
     pub diff: Option<String>,
 }
 
+/// Live run status for a session (idle, busy, retrying, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionStatusInfo {
     pub status: String,
@@ -50,6 +56,7 @@ pub struct SessionStatusInfo {
     pub next: Option<i64>,
 }
 
+/// A single typed segment within a message (text, file, tool call, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessagePart {
     pub id: String,
@@ -67,6 +74,7 @@ pub struct MessagePart {
     pub ignored: Option<bool>,
 }
 
+/// File attachment metadata within a message part.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {
     pub url: String,
@@ -74,6 +82,7 @@ pub struct FileInfo {
     pub mime: String,
 }
 
+/// A tool invocation request embedded in a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
@@ -81,6 +90,7 @@ pub struct ToolCall {
     pub input: serde_json::Value,
 }
 
+/// The output returned by a tool after execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResult {
     #[serde(alias = "toolCallId")]
@@ -90,6 +100,7 @@ pub struct ToolResult {
     pub is_error: bool,
 }
 
+/// A complete message in a session, including all parts and token usage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageInfo {
     pub id: String,
@@ -117,6 +128,7 @@ pub struct MessageInfo {
     pub parts: Vec<MessagePart>,
 }
 
+/// Token counts for a single message (input, output, cache, reasoning).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MessageTokensInfo {
     #[serde(default)]
@@ -131,6 +143,7 @@ pub struct MessageTokensInfo {
     pub cache_write: u64,
 }
 
+/// Request body for sending a user prompt to a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRequest {
     pub message: String,
@@ -141,22 +154,26 @@ pub struct PromptRequest {
     pub arguments: Option<String>,
 }
 
+/// Request body for executing a shell command inside a session.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteShellRequest {
     pub command: String,
     pub workdir: Option<String>,
 }
 
+/// Request body for creating a new session, optionally branched from a parent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSessionRequest {
     pub parent_id: Option<String>,
 }
 
+/// Request body for updating mutable session fields such as the title.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateSessionRequest {
     pub title: Option<String>,
 }
 
+/// List of available providers and the default model selection per provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderListResponse {
     pub providers: Vec<ProviderInfo>,
@@ -164,6 +181,7 @@ pub struct ProviderListResponse {
     pub default_model: HashMap<String, String>,
 }
 
+/// Summary of a single LLM provider and its available models.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderInfo {
     pub id: String,
@@ -171,6 +189,7 @@ pub struct ProviderInfo {
     pub models: Vec<ProviderModelInfo>,
 }
 
+/// Metadata for a single model offered by a provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderModelInfo {
     pub id: String,
@@ -187,6 +206,7 @@ pub struct ProviderModelInfo {
     pub context_window: Option<u64>,
 }
 
+/// Descriptor for a registered agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     pub id: String,
@@ -194,6 +214,7 @@ pub struct AgentInfo {
     pub description: Option<String>,
 }
 
+/// Connection status and tool/resource counts for an MCP server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpStatusInfo {
     pub name: String,
@@ -204,6 +225,7 @@ pub struct McpStatusInfo {
     pub error: Option<String>,
 }
 
+/// OAuth authorization details returned when starting MCP authentication.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpAuthStartInfo {
     pub authorization_url: String,
@@ -221,26 +243,31 @@ struct FormatterStatusResponse {
     formatters: Vec<String>,
 }
 
+/// Response body for a session share operation, containing the public URL.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShareResponse {
     pub url: String,
 }
 
+/// Response body for a session compact (summarize) operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactResponse {
     pub success: bool,
 }
 
+/// Request body for reverting a session to a specific message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RevertRequest {
     pub message_id: String,
 }
 
+/// Response body for a session revert operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RevertResponse {
     pub success: bool,
 }
 
+/// Blocking HTTP client for the kfcode backend REST API.
 pub struct ApiClient {
     client: Client,
     base_url: String,
@@ -248,6 +275,7 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
+    /// Create a new client targeting the given base URL.
     pub fn new(base_url: String) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
@@ -261,6 +289,7 @@ impl ApiClient {
         }
     }
 
+    /// Create a new session, optionally forked from a parent session.
     pub fn create_session(&self, parent_id: Option<String>) -> anyhow::Result<SessionInfo> {
         let url = format!("{}/session", self.base_url);
         let request = CreateSessionRequest { parent_id };
@@ -277,6 +306,7 @@ impl ApiClient {
         Ok(session)
     }
 
+    /// Fetch a single session by ID.
     pub fn get_session(&self, session_id: &str) -> anyhow::Result<SessionInfo> {
         let url = format!("{}/session/{}", self.base_url, session_id);
 
@@ -292,10 +322,12 @@ impl ApiClient {
         Ok(session)
     }
 
+    /// List all sessions without filtering.
     pub fn list_sessions(&self) -> anyhow::Result<Vec<SessionInfo>> {
         self.list_sessions_filtered(None, None)
     }
 
+    /// List sessions with optional search query and result limit.
     pub fn list_sessions_filtered(
         &self,
         search: Option<&str>,
@@ -327,6 +359,7 @@ impl ApiClient {
         Ok(sessions)
     }
 
+    /// Fetch the current run status for all sessions, keyed by session ID.
     pub fn get_session_status(&self) -> anyhow::Result<HashMap<String, SessionStatusInfo>> {
         let url = format!("{}/session/status", self.base_url);
         let response = self.client.get(&url).send()?;
@@ -338,6 +371,7 @@ impl ApiClient {
         Ok(response.json::<HashMap<String, SessionStatusInfo>>()?)
     }
 
+    /// Rename a session by updating its title.
     pub fn update_session_title(
         &self,
         session_id: &str,
@@ -362,6 +396,7 @@ impl ApiClient {
         Ok(session)
     }
 
+    /// Delete a session and return whether the deletion was confirmed by the server.
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<bool> {
         let url = format!("{}/session/{}", self.base_url, session_id);
         let response = self.client.delete(&url).send()?;
@@ -382,6 +417,7 @@ impl ApiClient {
             .unwrap_or(true))
     }
 
+    /// Send a user prompt to a session and return the server acknowledgement.
     pub fn send_prompt(
         &self,
         session_id: &str,
@@ -412,6 +448,7 @@ impl ApiClient {
         Ok(result)
     }
 
+    /// Execute a shell command in the context of a session.
     pub fn execute_shell(
         &self,
         session_id: &str,
@@ -431,6 +468,7 @@ impl ApiClient {
         Ok(response.json::<serde_json::Value>()?)
     }
 
+    /// Abort an in-progress session run.
     pub fn abort_session(&self, session_id: &str) -> anyhow::Result<serde_json::Value> {
         let url = format!("{}/session/{}/abort", self.base_url, session_id);
         let response = self.client.post(&url).send()?;
@@ -444,6 +482,7 @@ impl ApiClient {
         Ok(response.json::<serde_json::Value>()?)
     }
 
+    /// Retrieve the list of configured providers and their models.
     pub fn get_config_providers(&self) -> anyhow::Result<ProviderListResponse> {
         let url = format!("{}/config/providers", self.base_url);
 
@@ -459,6 +498,7 @@ impl ApiClient {
         Ok(providers)
     }
 
+    /// List all registered agents.
     pub fn list_agents(&self) -> anyhow::Result<Vec<AgentInfo>> {
         let url = format!("{}/agent", self.base_url);
 
@@ -474,6 +514,7 @@ impl ApiClient {
         Ok(agents)
     }
 
+    /// List the names of all available skills.
     pub fn list_skills(&self) -> anyhow::Result<Vec<String>> {
         let url = format!("{}/skill", self.base_url);
         let response = self.client.get(&url).send()?;
@@ -487,6 +528,7 @@ impl ApiClient {
         Ok(response.json::<Vec<String>>()?)
     }
 
+    /// Fetch the connection status of all configured MCP servers, sorted by name.
     pub fn get_mcp_status(&self) -> anyhow::Result<Vec<McpStatusInfo>> {
         let url = format!("{}/mcp", self.base_url);
 
@@ -506,6 +548,7 @@ impl ApiClient {
         Ok(servers)
     }
 
+    /// Begin the OAuth flow for an MCP server and return the authorization URL.
     pub fn start_mcp_auth(&self, name: &str) -> anyhow::Result<McpAuthStartInfo> {
         let url = format!("{}/mcp/{}/auth", self.base_url, name);
         let response = self.client.post(&url).send()?;
@@ -517,6 +560,7 @@ impl ApiClient {
         Ok(response.json::<McpAuthStartInfo>()?)
     }
 
+    /// Complete the OAuth callback for an MCP server.
     pub fn authenticate_mcp(&self, name: &str) -> anyhow::Result<McpStatusInfo> {
         let url = format!("{}/mcp/{}/auth/authenticate", self.base_url, name);
         let response = self.client.post(&url).send()?;
@@ -533,6 +577,7 @@ impl ApiClient {
         Ok(response.json::<McpStatusInfo>()?)
     }
 
+    /// Remove stored OAuth credentials for an MCP server.
     pub fn remove_mcp_auth(&self, name: &str) -> anyhow::Result<bool> {
         let url = format!("{}/mcp/{}/auth", self.base_url, name);
         let response = self.client.delete(&url).send()?;
@@ -553,6 +598,7 @@ impl ApiClient {
             .unwrap_or(true))
     }
 
+    /// Connect to an MCP server.
     pub fn connect_mcp(&self, name: &str) -> anyhow::Result<bool> {
         let url = format!("{}/mcp/{}/connect", self.base_url, name);
         let response = self.client.post(&url).send()?;
@@ -564,6 +610,7 @@ impl ApiClient {
         Ok(response.json::<bool>().unwrap_or(true))
     }
 
+    /// Disconnect from an MCP server.
     pub fn disconnect_mcp(&self, name: &str) -> anyhow::Result<bool> {
         let url = format!("{}/mcp/{}/disconnect", self.base_url, name);
         let response = self.client.post(&url).send()?;
@@ -575,6 +622,7 @@ impl ApiClient {
         Ok(response.json::<bool>().unwrap_or(true))
     }
 
+    /// Fetch all messages for a session.
     pub fn get_messages(&self, session_id: &str) -> anyhow::Result<Vec<MessageInfo>> {
         let url = format!("{}/session/{}/message", self.base_url, session_id);
 
@@ -590,6 +638,7 @@ impl ApiClient {
         Ok(messages)
     }
 
+    /// Return the names of active LSP servers.
     pub fn get_lsp_servers(&self) -> anyhow::Result<Vec<String>> {
         let url = format!("{}/lsp", self.base_url);
         let response = self.client.get(&url).send()?;
@@ -602,6 +651,7 @@ impl ApiClient {
         Ok(status.servers)
     }
 
+    /// Return the names of active code formatters.
     pub fn get_formatters(&self) -> anyhow::Result<Vec<String>> {
         let url = format!("{}/formatter", self.base_url);
         let response = self.client.get(&url).send()?;
@@ -614,6 +664,7 @@ impl ApiClient {
         Ok(status.formatters)
     }
 
+    /// Share a session and return the public URL.
     pub fn share_session(&self, session_id: &str) -> anyhow::Result<ShareResponse> {
         let url = format!("{}/session/{}/share", self.base_url, session_id);
         let response = self.client.post(&url).send()?;
@@ -630,6 +681,7 @@ impl ApiClient {
         Ok(response.json::<ShareResponse>()?)
     }
 
+    /// Revoke the public sharing link for a session.
     pub fn unshare_session(&self, session_id: &str) -> anyhow::Result<bool> {
         let url = format!("{}/session/{}/share", self.base_url, session_id);
         let response = self.client.delete(&url).send()?;
@@ -650,6 +702,7 @@ impl ApiClient {
             .unwrap_or(true))
     }
 
+    /// Compact (summarize) a session's history on the server.
     pub fn compact_session(&self, session_id: &str) -> anyhow::Result<CompactResponse> {
         let url = format!("{}/session/{}/compact", self.base_url, session_id);
         let response = self.client.post(&url).send()?;
@@ -666,6 +719,7 @@ impl ApiClient {
         Ok(response.json::<CompactResponse>()?)
     }
 
+    /// Revert a session to the state just before the given message.
     pub fn revert_session(
         &self,
         session_id: &str,
@@ -689,6 +743,7 @@ impl ApiClient {
         Ok(response.json::<RevertResponse>()?)
     }
 
+    /// Fork a session, optionally branching from a specific message.
     pub fn fork_session(
         &self,
         session_id: &str,
@@ -718,11 +773,13 @@ impl ApiClient {
         Ok(response.json::<SessionInfo>()?)
     }
 
+    /// Store a session as the current session in the shared cache.
     pub fn set_current_session(&self, session: SessionInfo) {
         let mut current = futures::executor::block_on(self.current_session.write());
         *current = Some(session);
     }
 
+    /// Read the cached current session, if any.
     pub fn get_current_session(&self) -> Option<SessionInfo> {
         let current = futures::executor::block_on(self.current_session.read());
         current.clone()

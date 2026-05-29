@@ -1,22 +1,27 @@
+//! Tool for applying multiple string-replacement edits across multiple files in one call.
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::{Tool, ToolContext, ToolError, ToolResult};
 
+/// Applies batched string-replacement edits to one or more files atomically.
 pub struct MultiEditTool;
 
+/// Deserialized input for a multi-edit request.
 #[derive(Debug, Serialize, Deserialize)]
 struct MultiEditInput {
     edits: Vec<FileEdit>,
 }
 
+/// A set of edits to apply to a single file.
 #[derive(Debug, Serialize, Deserialize)]
 struct FileEdit {
     file_path: String,
     edits: Vec<EditOperation>,
 }
 
+/// A single string-replacement operation within a file.
 #[derive(Debug, Serialize, Deserialize)]
 struct EditOperation {
     old_string: String,
@@ -189,6 +194,7 @@ impl Tool for MultiEditTool {
 }
 
 impl Default for MultiEditTool {
+    /// Returns a default `MultiEditTool` instance.
     fn default() -> Self {
         Self
     }

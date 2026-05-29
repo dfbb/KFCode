@@ -1,24 +1,30 @@
+//! Tools for reading and writing the per-session todo list.
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{TodoItemData, Tool, ToolContext, ToolError, ToolResult};
 
+/// Reads the current todo list for the active session.
 pub struct TodoReadTool;
 
+/// Replaces the current todo list for the active session.
 pub struct TodoWriteTool;
 
+/// Deserialized input for a todo-read request.
 #[derive(Debug, Serialize, Deserialize)]
 struct TodoReadInput {
     #[serde(default)]
     session_id: Option<String>,
 }
 
+/// Deserialized input for a todo-write request.
 #[derive(Debug, Serialize, Deserialize)]
 struct TodoWriteInput {
     todos: Vec<TodoWriteItem>,
     session_id: Option<String>,
 }
 
+/// A single todo item as supplied by the caller.
 #[derive(Debug, Serialize, Deserialize)]
 struct TodoWriteItem {
     id: Option<String>,

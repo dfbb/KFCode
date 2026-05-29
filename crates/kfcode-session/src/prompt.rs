@@ -1,3 +1,8 @@
+//! Session prompt execution: user message creation, LLM streaming loop, and tool dispatch.
+//!
+//! `SessionPrompt` drives the multi-step agentic loop: it sends messages to the
+//! provider, handles tool calls, manages compaction, and fires plugin hooks.
+
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -30,31 +35,47 @@ use crate::{MessageRole, PartType, Session, SessionMessage, SessionStateManager}
 
 const MAX_STEPS: u32 = 100;
 
+/// Input for a single prompt turn in a session.
 #[derive(Debug, Clone)]
 pub struct PromptInput {
+    /// Target session ID.
     pub session_id: String,
+    /// Optional explicit message ID to use for the user message.
     pub message_id: Option<String>,
+    /// Model to use; falls back to the session default when `None`.
     pub model: Option<ModelRef>,
+    /// Agent name that should handle this turn.
     pub agent: Option<String>,
+    /// When true, create the user message but skip the LLM reply.
     pub no_reply: bool,
+    /// Optional system prompt override for this turn.
     pub system: Option<String>,
+    /// Variant tag forwarded to the message metadata.
     pub variant: Option<String>,
+    /// Content parts that make up the user message.
     pub parts: Vec<PartInput>,
+    /// Per-tool enable/disable overrides.
     pub tools: Option<HashMap<String, bool>>,
 }
 
+/// A provider/model pair reference.
 #[derive(Debug, Clone)]
 pub struct ModelRef {
+    /// Provider identifier (e.g. `"anthropic"`).
     pub provider_id: String,
+    /// Model identifier (e.g. `"claude-sonnet-4-20250514"`).
     pub model_id: String,
 }
 
+/// A single content part within a user message.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum PartInput {
+    /// Plain text content.
     Text {
         text: String,
     },
+    /// A file attachment identified by URL.
     File {
         url: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,9 +83,11 @@ pub enum PartInput {
         #[serde(skip_serializing_if = "Option::is_none")]
         mime: Option<String>,
     },
+    /// A request to invoke a named agent.
     Agent {
         name: String,
     },
+    /// A subtask to be executed by a sub-agent.
     Subtask {
         prompt: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -82,7 +105,7 @@ impl TryFrom<serde_json::Value> for PartInput {
 }
 
 impl PartInput {
-    /// Parse a JSON array of parts into a Vec<PartInput>, skipping invalid entries.
+    /// Parse a JSON array of parts into a `Vec<PartInput>`, skipping invalid entries.
     pub fn parse_array(value: &serde_json::Value) -> Vec<PartInput> {
         match value.as_array() {
             Some(arr) => arr
@@ -127,13 +150,18 @@ struct PersistedSubsessionTurn {
 /// LLM parameters derived from agent configuration.
 #[derive(Debug, Clone, Default)]
 pub struct AgentParams {
+    /// Maximum tokens the model may generate per step.
     pub max_tokens: Option<u64>,
+    /// Sampling temperature.
     pub temperature: Option<f32>,
+    /// Nucleus sampling probability.
     pub top_p: Option<f32>,
 }
 
+/// Callback invoked after each session state change during the prompt loop.
 pub type SessionUpdateHook = Arc<dyn Fn(&Session) + Send + Sync + 'static>;
 
+/// Drives the agentic prompt loop for a session.
 pub struct SessionPrompt {
     state: Arc<Mutex<HashMap<String, PromptState>>>,
     session_state: Arc<RwLock<SessionStateManager>>,
@@ -142,6 +170,7 @@ pub struct SessionPrompt {
 }
 
 impl SessionPrompt {
+    /// Create a new prompt driver backed by the given session state manager.
     pub fn new(session_state: Arc<RwLock<SessionStateManager>>) -> Self {
         Self {
             state: Arc::new(Mutex::new(HashMap::new())),
@@ -151,16 +180,19 @@ impl SessionPrompt {
         }
     }
 
+    /// Attach an MCP client registry for resource resolution.
     pub fn with_mcp_clients(mut self, clients: Arc<kfcode_mcp::McpClientRegistry>) -> Self {
         self.mcp_clients = Some(clients);
         self
     }
 
+    /// Attach an LSP client registry for symbol-aware file windowing.
     pub fn with_lsp_registry(mut self, registry: Arc<kfcode_lsp::LspClientRegistry>) -> Self {
         self.lsp_registry = Some(registry);
         self
     }
 
+    /// Return an error if the session already has an active prompt loop.
     pub async fn assert_not_busy(&self, session_id: &str) -> anyhow::Result<()> {
         let state = self.state.lock().await;
         if state.contains_key(session_id) {
@@ -169,6 +201,7 @@ impl SessionPrompt {
         Ok(())
     }
 
+    /// Build and append the user message described by `input` to `session`.
     pub async fn create_user_message(
         &self,
         input: &PromptInput,
@@ -740,6 +773,7 @@ impl SessionPrompt {
         state.get(session_id).map(|s| s.cancel_token.clone())
     }
 
+    /// Return true if a prompt loop is currently running for `session_id`.
     pub async fn is_running(&self, session_id: &str) -> bool {
         let state = self.state.lock().await;
         state.contains_key(session_id)
@@ -754,6 +788,7 @@ impl SessionPrompt {
         session_state.set_idle(session_id);
     }
 
+    /// Cancel the running prompt loop for `session_id` and mark the session idle.
     pub async fn cancel(&self, session_id: &str) {
         let mut state = self.state.lock().await;
         if let Some(prompt_state) = state.remove(session_id) {
@@ -764,6 +799,7 @@ impl SessionPrompt {
         session_state.set_idle(session_id);
     }
 
+    /// Run a prompt turn: create the user message and drive the LLM loop.
     pub async fn prompt(
         &self,
         input: PromptInput,
@@ -785,6 +821,7 @@ impl SessionPrompt {
         .await
     }
 
+    /// Run a prompt turn with an optional post-step update callback.
     pub async fn prompt_with_update_hook(
         &self,
         input: PromptInput,
@@ -854,6 +891,7 @@ impl SessionPrompt {
         Ok(())
     }
 
+    /// Resume an already-running session loop (e.g. after a tool result is injected externally).
     pub async fn resume_session(
         &self,
         session_id: &str,
@@ -1473,6 +1511,7 @@ impl SessionPrompt {
         }
     }
 
+    /// Execute all pending tool calls on the last assistant message and append results.
     pub async fn execute_tool_calls(
         session: &mut Session,
         tool_registry: Arc<kfcode_tool::ToolRegistry>,
@@ -2595,6 +2634,7 @@ impl Default for SessionPrompt {
     }
 }
 
+/// Errors that can occur during a prompt turn.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum PromptError {
     #[error("Session is busy: {0}")]
@@ -2612,6 +2652,10 @@ pub enum PromptError {
 /// Group 1 = preceding char (or empty at start of string), Group 2 = the reference name.
 const FILE_REFERENCE_REGEX: &str = r"(?:^|([^\w`]))@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)";
 
+/// Resolve `@reference` patterns in a prompt template into `PartInput` entries.
+///
+/// Each `@name` that resolves to an existing file or directory becomes a `File`
+/// part; names matching a known agent become an `Agent` part.
 pub async fn resolve_prompt_parts(
     template: &str,
     worktree: &std::path::Path,
@@ -2673,6 +2717,7 @@ pub async fn resolve_prompt_parts(
     parts
 }
 
+/// Extract all `@reference` names from a prompt template string.
 pub fn extract_file_references(template: &str) -> Vec<String> {
     let re = regex::Regex::new(FILE_REFERENCE_REGEX).unwrap();
     let mut seen = std::collections::HashSet::new();
@@ -2691,6 +2736,7 @@ pub fn extract_file_references(template: &str) -> Vec<String> {
     result
 }
 
+/// Convert a list of `ToolSchema` values into provider `ToolDefinition` objects.
 pub fn tool_definitions_from_schemas(schemas: Vec<ToolSchema>) -> Vec<ToolDefinition> {
     schemas
         .into_iter()
@@ -2702,22 +2748,33 @@ pub fn tool_definitions_from_schemas(schemas: Vec<ToolSchema>) -> Vec<ToolDefini
         .collect()
 }
 
+/// A tool schema with name, description, and JSON parameter schema.
 #[derive(Debug, Clone)]
 pub struct ToolSchema {
+    /// Tool name as registered in the tool registry.
     pub name: String,
+    /// Human-readable description shown to the model.
     pub description: String,
+    /// JSON Schema object describing the tool's input parameters.
     pub parameters: serde_json::Value,
 }
 
+/// Executes a single subtask prompt against a sub-agent.
 pub struct SubtaskExecutor {
+    /// Name of the agent that will handle the subtask.
     pub agent_name: String,
+    /// Prompt text to send to the sub-agent.
     pub prompt: String,
+    /// Optional human-readable description of the subtask.
     pub description: Option<String>,
+    /// Model override for the sub-agent.
     pub model: Option<ModelRef>,
+    /// LLM sampling parameters for the sub-agent.
     pub agent_params: AgentParams,
 }
 
 impl SubtaskExecutor {
+    /// Create a new executor for the given agent and prompt.
     pub fn new(agent_name: &str, prompt: &str) -> Self {
         Self {
             agent_name: agent_name.to_string(),
@@ -2728,16 +2785,19 @@ impl SubtaskExecutor {
         }
     }
 
+    /// Set a human-readable description for the subtask.
     pub fn with_description(mut self, description: &str) -> Self {
         self.description = Some(description.to_string());
         self
     }
 
+    /// Override the model used for this subtask.
     pub fn with_model(mut self, model: ModelRef) -> Self {
         self.model = Some(model);
         self
     }
 
+    /// Execute the subtask via a persistent sub-session, falling back to inline execution.
     pub async fn execute(
         &self,
         provider: Arc<dyn Provider>,
@@ -2781,6 +2841,7 @@ impl SubtaskExecutor {
         ))
     }
 
+    /// Execute the subtask inline (single non-streaming chat call) without a sub-session.
     pub async fn execute_inline(
         &self,
         provider: Arc<dyn Provider>,
@@ -2893,6 +2954,7 @@ fn apply_chat_message_hook_outputs(
     }
 }
 
+/// Return true if the estimated token count of `messages` exceeds `max_tokens`.
 pub fn should_compact(messages: &[SessionMessage], max_tokens: u64) -> bool {
     let total_chars: usize = messages
         .iter()
@@ -2911,6 +2973,7 @@ pub fn should_compact(messages: &[SessionMessage], max_tokens: u64) -> bool {
     estimated_tokens > max_tokens as usize
 }
 
+/// Compact `session` if `messages` exceeds the token threshold, returning the summary.
 pub fn trigger_compaction(session: &mut Session, messages: &[SessionMessage]) -> Option<String> {
     if !should_compact(messages, 100000) {
         return None;
@@ -2965,10 +3028,13 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT: &str = r#"IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema."#;
 
+/// Configuration for structured output mode.
 pub struct StructuredOutputConfig {
+    /// JSON Schema the model must conform to when calling `StructuredOutput`.
     pub schema: serde_json::Value,
 }
 
+/// Build a `StructuredOutput` tool definition from a JSON Schema.
 pub fn create_structured_output_tool(schema: serde_json::Value) -> ToolDefinition {
     let mut tool_schema = schema;
     if let Some(obj) = tool_schema.as_object_mut() {
@@ -2982,10 +3048,12 @@ pub fn create_structured_output_tool(schema: serde_json::Value) -> ToolDefinitio
     }
 }
 
+/// Return the system prompt injected when structured output mode is active.
 pub fn structured_output_system_prompt() -> String {
     STRUCTURED_OUTPUT_SYSTEM_PROMPT.to_string()
 }
 
+/// Extract the `StructuredOutput` tool call input from a list of message parts.
 pub fn extract_structured_output(parts: &[crate::MessagePart]) -> Option<serde_json::Value> {
     for part in parts {
         if let PartType::ToolCall { name, input, .. } = &part.part_type {
@@ -3024,6 +3092,11 @@ const BUILD_SWITCH: &str = r#"The user has approved your plan and wants you to e
 - Follow the plan closely but adapt as needed
 - Report progress to the user"#;
 
+/// Inject agent-specific reminder text into the last user message.
+///
+/// For the `"plan"` agent, appends the plan-mode instructions.
+/// For the `"build"` agent when the session previously ran a plan, appends the
+/// build-switch instructions.
 pub fn insert_reminders(
     messages: &[SessionMessage],
     agent_name: &str,
@@ -3070,6 +3143,7 @@ pub fn insert_reminders(
     }
 }
 
+/// Return true if any message in the list was produced by the `"plan"` agent.
 pub fn was_plan_agent(messages: &[SessionMessage]) -> bool {
     messages.iter().any(|m| {
         if let Some(agent) = m.metadata.get("agent") {
@@ -3080,12 +3154,17 @@ pub fn was_plan_agent(messages: &[SessionMessage]) -> bool {
     })
 }
 
+/// A resolved tool with name, description, and parameter schema.
 pub struct ResolvedTool {
+    /// Tool name.
     pub name: String,
+    /// Human-readable description.
     pub description: String,
+    /// JSON Schema for the tool's input parameters.
     pub parameters: serde_json::Value,
 }
 
+/// Merge two tool definition lists, deduplicating by name (extra overrides base).
 pub fn merge_tool_definitions(
     base: Vec<ToolDefinition>,
     extra: Vec<ToolDefinition>,
@@ -3100,6 +3179,7 @@ pub fn merge_tool_definitions(
     tools
 }
 
+/// Resolve tools from the registry and merge with the provided MCP tool list.
 pub async fn resolve_tools_with_mcp(
     tool_registry: &kfcode_tool::ToolRegistry,
     mcp_tools: Vec<ToolDefinition>,
@@ -3118,6 +3198,7 @@ pub async fn resolve_tools_with_mcp(
     merge_tool_definitions(base, mcp_tools)
 }
 
+/// Resolve tools from the registry and merge with tools from an MCP tool registry.
 pub async fn resolve_tools_with_mcp_registry(
     tool_registry: &kfcode_tool::ToolRegistry,
     mcp_registry: Option<&kfcode_mcp::McpToolRegistry>,
@@ -3140,14 +3221,17 @@ pub async fn resolve_tools_with_mcp_registry(
     resolve_tools_with_mcp(tool_registry, dynamic_mcp_tools).await
 }
 
+/// Resolve tools from the registry with no MCP tools.
 pub async fn resolve_tools(tool_registry: &kfcode_tool::ToolRegistry) -> Vec<ToolDefinition> {
     resolve_tools_with_mcp_registry(tool_registry, None).await
 }
 
+/// Return the maximum number of steps for an agent, defaulting to `MAX_STEPS`.
 pub fn max_steps_for_agent(agent_steps: Option<u32>) -> u32 {
     agent_steps.unwrap_or(MAX_STEPS)
 }
 
+/// Generate a session title from the first user message (truncated to 100 chars).
 pub fn generate_session_title(first_user_message: &str) -> String {
     let first_line = first_user_message.lines().next().unwrap_or("").trim();
 

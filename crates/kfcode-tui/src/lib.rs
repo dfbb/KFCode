@@ -1,3 +1,5 @@
+//! Terminal user interface crate for kfcode — entry point and module re-exports.
+
 pub mod api;
 pub mod app;
 pub mod branding;
@@ -19,6 +21,7 @@ pub use router::{Route, Router};
 pub use terminal::{reset_title, set_session_title, set_title};
 pub use theme::Theme;
 
+/// Restore the terminal and print panic info before unwinding.
 fn setup_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
         let _ = crossterm::terminal::disable_raw_mode();
@@ -31,6 +34,7 @@ fn setup_panic_hook() {
     }));
 }
 
+/// Initialize the TUI, run the event loop, and restore the terminal on exit.
 pub fn run_tui() -> anyhow::Result<()> {
     setup_panic_hook();
 

@@ -1,3 +1,5 @@
+//! Renders individual tool calls inline or as block-level output within a session.
+
 use std::collections::HashMap;
 
 use ratatui::{
@@ -8,11 +10,16 @@ use serde_json::Value;
 
 use crate::theme::Theme;
 
+/// Execution state of a tool call.
 #[derive(Clone, Copy)]
 pub enum ToolState {
+    /// Waiting to be dispatched.
     Pending,
+    /// Currently executing.
     Running,
+    /// Finished successfully.
     Completed,
+    /// Finished with an error.
     Failed,
 }
 

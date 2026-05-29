@@ -1,3 +1,5 @@
+//! Application-wide shared context, UI preferences, and provider/MCP/LSP state.
+
 use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -11,6 +13,7 @@ use crate::event::EventBus;
 use crate::router::Router;
 use crate::theme::Theme;
 
+/// Summary of a provider and its available models, stored in the context.
 #[derive(Clone)]
 pub struct ProviderInfo {
     pub id: String,
@@ -18,6 +21,7 @@ pub struct ProviderInfo {
     pub models: Vec<ModelInfo>,
 }
 
+/// Capability metadata for a single model.
 #[derive(Clone)]
 pub struct ModelInfo {
     pub id: String,
@@ -28,6 +32,7 @@ pub struct ModelInfo {
     pub supports_tools: bool,
 }
 
+/// Connection status and error for a single MCP server.
 #[derive(Clone)]
 pub struct McpServerStatus {
     pub name: String,
@@ -35,16 +40,24 @@ pub struct McpServerStatus {
     pub error: Option<String>,
 }
 
+/// Possible connection states for an MCP server.
 #[derive(Clone, Debug)]
 pub enum McpConnectionStatus {
+    /// Server is connected and ready.
     Connected,
+    /// Server is not connected.
     Disconnected,
+    /// Connection attempt failed.
     Failed,
+    /// Server requires OAuth authentication before connecting.
     NeedsAuth,
+    /// Server requires client registration before OAuth can proceed.
     NeedsClientRegistration,
+    /// Server is administratively disabled.
     Disabled,
 }
 
+/// Connection status for a single LSP server.
 #[derive(Clone)]
 pub struct LspStatus {
     pub id: String,
@@ -52,26 +65,37 @@ pub struct LspStatus {
     pub status: LspConnectionStatus,
 }
 
+/// Possible connection states for an LSP server.
 #[derive(Clone, Debug)]
 pub enum LspConnectionStatus {
+    /// LSP server is connected and responding.
     Connected,
+    /// LSP server encountered an error.
     Error,
 }
 
+/// Controls whether the sidebar is shown automatically, always, or never.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SidebarMode {
+    /// Show the sidebar only when there is enough horizontal space.
     Auto,
+    /// Always show the sidebar.
     Show,
+    /// Always hide the sidebar.
     Hide,
 }
 
+/// Controls the vertical spacing between messages in the session view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageDensity {
+    /// Minimal spacing — more messages visible at once.
     Compact,
+    /// Extra spacing — easier to read individual messages.
     Cozy,
 }
 
 impl MessageDensity {
+    /// Parse a density string, defaulting to `Compact` for unrecognized values.
     pub fn from_str_lossy(s: &str) -> Self {
         if s.eq_ignore_ascii_case("cozy") {
             Self::Cozy
@@ -80,6 +104,7 @@ impl MessageDensity {
         }
     }
 
+    /// Return the canonical string representation used for persistence.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Compact => "compact",
@@ -88,6 +113,7 @@ impl MessageDensity {
     }
 }
 
+/// Thread-safe shared state accessible by all TUI components via `Arc<AppContext>`.
 pub struct AppContext {
     pub theme: RwLock<Theme>,
     pub theme_name: RwLock<String>,
@@ -121,6 +147,7 @@ pub struct AppContext {
 }
 
 impl AppContext {
+    /// Create a new context, loading persisted UI preferences from disk.
     pub fn new() -> Self {
         let ui_kv = UiKv::load();
         let default_theme_name = format!("kfcode@{}", detect_terminal_theme_mode());
@@ -160,83 +187,100 @@ impl AppContext {
         }
     }
 
+    /// Push a new route onto the router.
     pub fn navigate(&self, route: crate::router::Route) {
         self.router.write().navigate(route);
     }
 
+    /// Return a clone of the currently active route.
     pub fn current_route(&self) -> crate::router::Route {
         self.router.read().current().clone()
     }
 
+    /// Toggle the sidebar visibility flag.
     pub fn toggle_sidebar(&self) {
         let mut sidebar = self.show_sidebar.write();
         *sidebar = !*sidebar;
     }
 
+    /// Toggle the session header visibility and persist the preference.
     pub fn toggle_header(&self) {
         let mut show = self.show_header.write();
         *show = !*show;
         self.ui_kv.write().set_bool("header_visible", *show);
     }
 
+    /// Toggle the scrollbar visibility and persist the preference.
     pub fn toggle_scrollbar(&self) {
         let mut show = self.show_scrollbar.write();
         *show = !*show;
         self.ui_kv.write().set_bool("scrollbar_visible", *show);
     }
 
+    /// Toggle the home-screen tips visibility and persist the preference.
     pub fn toggle_tips_hidden(&self) {
         let mut hidden = self.tips_hidden.write();
         *hidden = !*hidden;
         self.ui_kv.write().set_bool("tips_hidden", *hidden);
     }
 
+    /// Set the active model and provider (both required).
     pub fn set_model(&self, model: String, provider: String) {
         self.set_model_selection(model, Some(provider));
     }
 
+    /// Set the active model with an optional provider override.
     pub fn set_model_selection(&self, model: String, provider: Option<String>) {
         *self.current_model.write() = Some(model);
         *self.current_provider.write() = provider;
     }
 
+    /// Set the active model variant (e.g. "thinking").
     pub fn set_model_variant(&self, variant: Option<String>) {
         *self.current_variant.write() = variant;
     }
 
+    /// Return the currently selected model variant, if any.
     pub fn current_model_variant(&self) -> Option<String> {
         self.current_variant.read().clone()
     }
 
+    /// Set the active agent by name.
     pub fn set_agent(&self, agent: String) {
         *self.current_agent.write() = agent;
     }
 
+    /// Toggle the animation enabled flag.
     pub fn toggle_animations(&self) {
         let mut enabled = self.animations_enabled.write();
         *enabled = !*enabled;
     }
 
+    /// Update the count of pending permission prompts shown in the status bar.
     pub fn set_pending_permissions(&self, count: usize) {
         *self.pending_permissions.write() = count;
     }
 
+    /// Record whether at least one provider with models is connected.
     pub fn set_has_connected_provider(&self, connected: bool) {
         *self.has_connected_provider.write() = connected;
     }
 
+    /// Toggle message timestamp display and persist the preference.
     pub fn toggle_timestamps(&self) {
         let mut show = self.show_timestamps.write();
         *show = !*show;
         self.ui_kv.write().set_timestamps(*show);
     }
 
+    /// Toggle thinking-block visibility and persist the preference.
     pub fn toggle_thinking(&self) {
         let mut show = self.show_thinking.write();
         *show = !*show;
         self.ui_kv.write().set_bool("thinking_visibility", *show);
     }
 
+    /// Toggle tool-call detail visibility and persist the preference.
     pub fn toggle_tool_details(&self) {
         let mut show = self.show_tool_details.write();
         *show = !*show;
@@ -245,6 +289,7 @@ impl AppContext {
             .set_bool("tool_details_visibility", *show);
     }
 
+    /// Cycle message density between Compact and Cozy and persist the preference.
     pub fn toggle_message_density(&self) {
         let mut density = self.message_density.write();
         *density = match *density {
@@ -256,12 +301,14 @@ impl AppContext {
             .set_string("message_density", density.as_str());
     }
 
+    /// Toggle semantic path/error highlighting and persist the preference.
     pub fn toggle_semantic_highlight(&self) {
         let mut enabled = self.semantic_highlight.write();
         *enabled = !*enabled;
         self.ui_kv.write().set_bool("semantic_highlight", *enabled);
     }
 
+    /// Switch between the dark and light variants of the current theme; returns `true` on success.
     pub fn toggle_theme_mode(&self) -> bool {
         let current = normalize_theme_name(&self.current_theme_name());
         let Some((base, variant)) = split_theme_variant(&current) else {
@@ -271,6 +318,7 @@ impl AppContext {
         self.set_theme_by_name(&format!("{base}@{next}"))
     }
 
+    /// Activate a theme by name; returns `true` if the name was recognized.
     pub fn set_theme_by_name(&self, name: &str) -> bool {
         if let Some(theme) = Theme::by_name(name) {
             *self.theme.write() = theme;
@@ -280,10 +328,12 @@ impl AppContext {
         false
     }
 
+    /// Return the normalized name of the currently active theme.
     pub fn current_theme_name(&self) -> String {
         self.theme_name.read().clone()
     }
 
+    /// Return the sorted list of all built-in theme names (dark and light variants).
     pub fn available_theme_names(&self) -> Vec<String> {
         let mut names = Theme::builtin_theme_names()
             .into_iter()
@@ -293,10 +343,12 @@ impl AppContext {
         names
     }
 
+    /// Store the API client for use by the rest of the application.
     pub fn set_api_client(&self, client: Arc<ApiClient>) {
         *self.api_client.write() = Some(client);
     }
 
+    /// Return a clone of the API client, if one has been set.
     pub fn get_api_client(&self) -> Option<Arc<ApiClient>> {
         self.api_client.read().clone()
     }

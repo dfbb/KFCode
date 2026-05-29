@@ -1,8 +1,8 @@
 //! Advanced string matching and replacement strategies for the edit tool.
 //!
 //! Sources:
-//! - https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-23-25.ts
-//! - https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/utils/editCorrector.ts
+//! - <https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-23-25.ts>
+//! - <https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/utils/editCorrector.ts>
 
 use std::ops::Range;
 
@@ -44,18 +44,25 @@ fn levenshtein(a: &str, b: &str) -> usize {
     matrix[a_len][b_len]
 }
 
+/// A successful match result containing the matched text and its byte range.
 #[derive(Debug, Clone)]
 pub struct Replacement {
+    /// The exact text that was matched in the source content.
     pub matched: String,
+    /// Byte range of the match within the source content.
     pub range: Range<usize>,
 }
 
+/// Strategy for locating a search string within file content.
 pub trait Replacer: Send + Sync {
+    /// Returns the name of this replacer strategy.
     fn name(&self) -> &str;
+    /// Yields candidate strings from `content` that match `find`.
     fn find<'a>(&'a self, content: &'a str, find: &'a str)
         -> Box<dyn Iterator<Item = String> + 'a>;
 }
 
+/// Replacer that performs a literal exact-match search.
 pub struct SimpleReplacer;
 
 impl Replacer for SimpleReplacer {
@@ -72,6 +79,7 @@ impl Replacer for SimpleReplacer {
     }
 }
 
+/// Replacer that matches lines after trimming leading and trailing whitespace.
 pub struct LineTrimmedReplacer;
 
 impl Replacer for LineTrimmedReplacer {
@@ -129,6 +137,7 @@ impl Replacer for LineTrimmedReplacer {
     }
 }
 
+/// Replacer that anchors on the first and last lines of a block and uses similarity scoring for the interior.
 pub struct BlockAnchorReplacer;
 
 impl Replacer for BlockAnchorReplacer {
@@ -262,6 +271,7 @@ impl Replacer for BlockAnchorReplacer {
     }
 }
 
+/// Replacer that collapses runs of whitespace before comparing.
 pub struct WhitespaceNormalizedReplacer;
 
 impl Replacer for WhitespaceNormalizedReplacer {
@@ -317,6 +327,7 @@ impl Replacer for WhitespaceNormalizedReplacer {
     }
 }
 
+/// Replacer that strips common leading indentation before comparing.
 pub struct IndentationFlexibleReplacer;
 
 impl Replacer for IndentationFlexibleReplacer {
@@ -374,6 +385,7 @@ impl Replacer for IndentationFlexibleReplacer {
     }
 }
 
+/// Replacer that unescapes common escape sequences before comparing.
 pub struct EscapeNormalizedReplacer;
 
 impl Replacer for EscapeNormalizedReplacer {
@@ -465,6 +477,7 @@ impl Replacer for EscapeNormalizedReplacer {
     }
 }
 
+/// Replacer that trims leading and trailing whitespace from the search string before matching.
 pub struct TrimmedBoundaryReplacer;
 
 impl Replacer for TrimmedBoundaryReplacer {
@@ -501,6 +514,7 @@ impl Replacer for TrimmedBoundaryReplacer {
     }
 }
 
+/// Replacer that matches blocks sharing the same first and last lines with at least 50% interior line overlap.
 pub struct ContextAwareReplacer;
 
 impl Replacer for ContextAwareReplacer {
@@ -563,6 +577,7 @@ impl Replacer for ContextAwareReplacer {
     }
 }
 
+/// Replacer that counts all occurrences of the search string and yields each one.
 pub struct MultiOccurrenceReplacer;
 
 impl Replacer for MultiOccurrenceReplacer {
@@ -580,6 +595,7 @@ impl Replacer for MultiOccurrenceReplacer {
     }
 }
 
+/// Replacer that tries each strategy in order and uses the first successful match.
 pub struct CompositeReplacer {
     replacers: Vec<Box<dyn Replacer>>,
 }
@@ -603,10 +619,12 @@ impl Default for CompositeReplacer {
 }
 
 impl CompositeReplacer {
+    /// Creates a `CompositeReplacer` with the default ordered set of strategies.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Replaces `old_string` with `new_string` in `content`, using the first matching strategy.
     pub fn replace(
         &self,
         content: &str,
@@ -649,10 +667,12 @@ impl CompositeReplacer {
     }
 }
 
+/// Normalizes Windows-style line endings to Unix-style.
 pub fn normalize_line_endings(text: &str) -> String {
     text.replace("\r\n", "\n")
 }
 
+/// Removes common leading indentation from diff content lines to reduce visual noise.
 pub fn trim_diff(diff: &str) -> String {
     let lines: Vec<&str> = diff.split('\n').collect();
 
@@ -710,6 +730,7 @@ pub fn trim_diff(diff: &str) -> String {
     trimmed_lines.join("\n")
 }
 
+/// Generates a unified diff string showing all changes between `old_content` and `new_content`.
 pub fn generate_unified_diff(file_path: &str, old_content: &str, new_content: &str) -> String {
     let old_lines: Vec<&str> = old_content.lines().collect();
     let new_lines: Vec<&str> = new_content.lines().collect();
@@ -734,13 +755,18 @@ pub fn generate_unified_diff(file_path: &str, old_content: &str, new_content: &s
     result
 }
 
+/// Summary of line-level additions and deletions for a single file.
 pub struct FileDiff {
+    /// Relative or absolute path of the file.
     pub path: String,
+    /// Number of lines added.
     pub additions: usize,
+    /// Number of lines deleted.
     pub deletions: usize,
 }
 
 impl FileDiff {
+    /// Computes addition and deletion counts by comparing `old_content` and `new_content` line counts.
     pub fn from_contents(old_content: &str, new_content: &str) -> Self {
         let old_lines: Vec<&str> = old_content.lines().collect();
         let new_lines: Vec<&str> = new_content.lines().collect();

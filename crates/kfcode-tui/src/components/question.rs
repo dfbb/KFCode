@@ -1,3 +1,5 @@
+//! Interactive question prompt for text and choice-based agent questions.
+
 use std::cell::Cell;
 
 use ratatui::prelude::Stylize;
@@ -11,19 +13,25 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// The kind of answer expected for a question.
 #[derive(Clone, Debug, PartialEq)]
 pub enum QuestionType {
+    /// Free-form text answer.
     Text,
+    /// Multiple options may be selected.
     MultipleChoice,
+    /// Exactly one option must be selected.
     SingleChoice,
 }
 
+/// A selectable option within a choice question.
 #[derive(Clone, Debug)]
 pub struct QuestionOption {
     pub id: String,
     pub label: String,
 }
 
+/// A question posed by the agent that requires user input.
 #[derive(Clone, Debug)]
 pub struct QuestionRequest {
     pub id: String,
@@ -32,6 +40,7 @@ pub struct QuestionRequest {
     pub options: Vec<QuestionOption>,
 }
 
+/// Inline prompt that presents a question and collects the user's answer.
 pub struct QuestionPrompt {
     current_question: Option<QuestionRequest>,
     pub is_open: bool,
@@ -42,6 +51,7 @@ pub struct QuestionPrompt {
 }
 
 impl QuestionPrompt {
+    /// Create an empty question prompt.
     pub fn new() -> Self {
         Self {
             current_question: None,
@@ -53,6 +63,7 @@ impl QuestionPrompt {
         }
     }
 
+    /// Display the given question and open the prompt.
     pub fn ask(&mut self, question: QuestionRequest) {
         let option_count = question.options.len();
         self.current_question = Some(question);
@@ -62,10 +73,12 @@ impl QuestionPrompt {
         self.text_input.clear();
     }
 
+    /// Return the current question without consuming it.
     pub fn current(&self) -> Option<&QuestionRequest> {
         self.current_question.as_ref()
     }
 
+    /// Dismiss the current question and reset state.
     pub fn close(&mut self) {
         self.current_question = None;
         self.is_open = false;
@@ -74,12 +87,14 @@ impl QuestionPrompt {
         self.text_input.clear();
     }
 
+    /// Move the selection cursor up.
     pub fn move_up(&mut self) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
         }
     }
 
+    /// Move the selection cursor down.
     pub fn move_down(&mut self) {
         if let Some(q) = &self.current_question {
             if !q.options.is_empty() && self.selected_index + 1 < q.options.len() {
@@ -88,6 +103,7 @@ impl QuestionPrompt {
         }
     }
 
+    /// Toggle the selection state of the currently highlighted option.
     pub fn toggle_selected(&mut self) {
         if let Some(q) = &self.current_question {
             if q.question_type == QuestionType::MultipleChoice
@@ -107,6 +123,7 @@ impl QuestionPrompt {
         }
     }
 
+    /// Append a character to the text input or select an option by letter key.
     pub fn type_char(&mut self, c: char) {
         if let Some(q) = &self.current_question {
             if q.question_type == QuestionType::Text {
@@ -129,6 +146,7 @@ impl QuestionPrompt {
         }
     }
 
+    /// Delete the last character from the text input.
     pub fn backspace(&mut self) {
         if let Some(q) = &self.current_question {
             if q.question_type == QuestionType::Text {
@@ -137,6 +155,7 @@ impl QuestionPrompt {
         }
     }
 
+    /// Confirm the current answer; returns the question and answer string, or None if no question is active.
     pub fn confirm(&mut self) -> Option<(QuestionRequest, String)> {
         let q = self.current_question.as_ref()?;
         let answer = if q.question_type == QuestionType::Text {
@@ -159,6 +178,7 @@ impl QuestionPrompt {
         Some((request, answer))
     }
 
+    /// Handle a mouse click, selecting the option under the cursor.
     pub fn handle_click(&mut self, col: u16, row: u16) {
         if !self.is_open {
             return;
@@ -185,6 +205,7 @@ impl QuestionPrompt {
         }
     }
 
+    /// Render the question prompt at the bottom of the given area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.is_open {
             return;

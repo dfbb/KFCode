@@ -1,3 +1,8 @@
+//! Loading and resolution of instruction files (AGENTS.md, CLAUDE.md, etc.).
+//!
+//! Mirrors the TypeScript `InstructionPrompt` module: walks the directory tree
+//! to find well-known instruction files and fetches URL-based instructions.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -12,23 +17,37 @@ pub const COPILOT_MD: &str = ".github/copilot-instructions.md";
 /// Well-known instruction file names searched in project directories.
 const PROJECT_FILES: &[&str] = &[AGENTS_MD, CLAUDE_MD, CONTEXT_MD];
 
+/// A loaded instruction file with its content and origin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstructionFile {
+    /// Absolute path or URL from which the content was loaded.
     pub path: String,
+    /// Raw text content of the instruction file.
     pub content: String,
+    /// How this file was discovered.
     pub source: InstructionSource,
 }
 
+/// The origin of a loaded instruction file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InstructionSource {
+    /// Loaded from an `AGENTS.md` file.
     AgentsMd,
+    /// Loaded from a `CLAUDE.md` file.
     ClaudeMd,
+    /// Loaded from a `CONTEXT.md` file (deprecated).
     ContextMd,
+    /// Loaded from a `.cursorrules` file.
     CursorRules,
+    /// Loaded from `.github/copilot-instructions.md`.
     CopilotInstructions,
+    /// Loaded from a global config directory; contains the resolved path.
     Global(String),
+    /// Loaded via a `config.instructions` entry; contains the original entry string.
     ConfigInstruction(String),
+    /// Fetched from a URL.
     Url(String),
+    /// Loaded from a custom file name.
     Custom(String),
 }
 
@@ -252,12 +271,14 @@ pub fn resolve_agents_for_file(file_path: &Path, project_root: &Path) -> Vec<Ins
 // InstructionLoader
 // ---------------------------------------------------------------------------
 
+/// Loads and deduplicates instruction files from multiple sources.
 pub struct InstructionLoader {
     /// Tracks already-loaded file paths and URLs for deduplication.
     loaded: HashSet<String>,
 }
 
 impl InstructionLoader {
+    /// Create a new loader with an empty deduplication set.
     pub fn new() -> Self {
         Self {
             loaded: HashSet::new(),
@@ -459,10 +480,6 @@ impl InstructionLoader {
             }
         }
     }
-    // -----------------------------------------------------------------------
-    // Backward-compatible helpers (kept from original API)
-    // -----------------------------------------------------------------------
-
     /// Load instruction files from a single directory (original API).
     pub fn load_from_directory(dir: &Path) -> Vec<InstructionFile> {
         let mut instructions = Vec::new();
@@ -503,6 +520,7 @@ impl InstructionLoader {
         instructions
     }
 
+    /// Concatenate instruction files into a single string with source headers.
     pub fn merge_instructions(instructions: &[InstructionFile]) -> String {
         instructions
             .iter()
@@ -511,6 +529,7 @@ impl InstructionLoader {
             .join("\n\n")
     }
 
+    /// Return paths of all well-known instruction files that exist in `dir`.
     pub fn find_instruction_files(dir: &Path) -> Vec<PathBuf> {
         let mut files = Vec::new();
         let candidates = [AGENTS_MD, CLAUDE_MD, CURSOR_MD];

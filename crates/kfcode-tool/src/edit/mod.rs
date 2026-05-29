@@ -1,3 +1,5 @@
+//! File editing tool and string replacement strategies.
+
 mod replacers;
 mod tool;
 

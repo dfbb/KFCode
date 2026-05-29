@@ -1,3 +1,4 @@
+//! Tool for writing content to files on the local filesystem.
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -9,11 +10,13 @@ const MAX_DIAGNOSTICS_PER_FILE: usize = 20;
 #[cfg(feature = "lsp")]
 const MAX_PROJECT_DIAGNOSTICS_FILES: usize = 5;
 
+/// Writes or overwrites a file, creating parent directories as needed.
 pub struct WriteTool {
     directory: PathBuf,
 }
 
 impl WriteTool {
+    /// Creates a `WriteTool` rooted at the current working directory.
     pub fn new() -> Self {
         Self {
             directory: std::env::current_dir().unwrap_or_default(),

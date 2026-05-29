@@ -1,23 +1,28 @@
+//! Tool for prompting the user with interactive questions during agent execution.
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};
 
 use crate::{Tool, ToolContext, ToolError, ToolResult};
 
+/// Presents one or more questions to the user and collects their answers.
 pub struct QuestionTool;
 
 impl QuestionTool {
+    /// Creates a new `QuestionTool`.
     pub fn new() -> Self {
         Self
     }
 }
 
+/// Deserialized input containing the list of questions to ask.
 #[derive(Debug, Serialize, Deserialize)]
 struct QuestionInput {
     #[serde(rename = "questions")]
     questions: Vec<QuestionDef>,
 }
 
+/// Definition of a single question, including optional multiple-choice options.
 #[derive(Debug, Serialize, Deserialize)]
 struct QuestionDef {
     #[serde(rename = "question")]
@@ -30,6 +35,7 @@ struct QuestionDef {
     multiple: bool,
 }
 
+/// A single selectable option within a question.
 #[derive(Debug, Serialize, Deserialize)]
 struct QuestionOption {
     #[serde(rename = "label")]
@@ -38,6 +44,7 @@ struct QuestionOption {
     description: Option<String>,
 }
 
+/// Collected answers returned after all questions have been answered.
 #[derive(Debug, Serialize, Deserialize)]
 struct QuestionResponse {
     answers: Vec<String>,
@@ -212,6 +219,7 @@ fn ask_question(q: &QuestionDef) -> Result<Vec<String>, ToolError> {
 }
 
 impl Default for QuestionTool {
+    /// Returns a default `QuestionTool` instance.
     fn default() -> Self {
         Self::new()
     }

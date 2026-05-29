@@ -1,3 +1,5 @@
+//! Renders assistant text and reasoning parts as styled line sequences.
+
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -20,11 +22,13 @@ pub fn render_text_part(text: &str, theme: &Theme, marker_color: Color) -> Vec<L
 }
 
 /// Render a reasoning/thinking part with muted styling and collapsible header.
+/// Output of rendering a reasoning block, including whether it can be collapsed.
 pub struct ReasoningRender {
     pub lines: Vec<Line<'static>>,
     pub collapsible: bool,
 }
 
+/// Render a reasoning block, optionally collapsed to a preview.
 pub fn render_reasoning_part(
     text: &str,
     theme: &Theme,

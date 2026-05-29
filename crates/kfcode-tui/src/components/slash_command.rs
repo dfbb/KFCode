@@ -1,3 +1,5 @@
+//! Slash-command palette popup for browsing and selecting commands.
+
 use ratatui::{
     layout::Rect,
     style::Style,
@@ -9,6 +11,7 @@ use ratatui::{
 use crate::command::{CommandAction, CommandRegistry};
 use crate::theme::Theme;
 
+/// Floating popup that lists and filters slash commands.
 pub struct SlashCommandPopup {
     pub registry: CommandRegistry,
     pub query: String,
@@ -19,6 +22,7 @@ pub struct SlashCommandPopup {
 }
 
 impl SlashCommandPopup {
+    /// Create a new slash command popup.
     pub fn new() -> Self {
         Self {
             registry: CommandRegistry::new(),
@@ -30,6 +34,7 @@ impl SlashCommandPopup {
         }
     }
 
+    /// Open the popup and reset the query.
     pub fn open(&mut self) {
         self.query = String::new();
         self.refresh_filter();
@@ -38,20 +43,24 @@ impl SlashCommandPopup {
         self.selected_action = None;
     }
 
+    /// Close the popup and clear state.
     pub fn close(&mut self) {
         self.open = false;
         self.query.clear();
         self.filtered.clear();
     }
 
+    /// Returns true if the popup is currently open.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Consume and return the action selected by the user, if any.
     pub fn take_action(&mut self) -> Option<CommandAction> {
         self.selected_action.take()
     }
 
+    /// Return the current search query.
     pub fn query(&self) -> &str {
         &self.query
     }
@@ -75,11 +84,13 @@ impl SlashCommandPopup {
         self.state.select(Some(0));
     }
 
+    /// Append a character to the query and refresh the filtered list.
     pub fn handle_input(&mut self, c: char) {
         self.query.push(c);
         self.refresh_filter();
     }
 
+    /// Remove the last character from the query; returns false if the query was already empty.
     pub fn handle_backspace(&mut self) -> bool {
         if self.query.pop().is_some() {
             self.refresh_filter();
@@ -89,6 +100,7 @@ impl SlashCommandPopup {
         }
     }
 
+    /// Move the selection cursor up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             let new = selected.saturating_sub(1);
@@ -96,6 +108,7 @@ impl SlashCommandPopup {
         }
     }
 
+    /// Move the selection cursor down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             let new = (selected + 1).min(self.filtered.len().saturating_sub(1));
@@ -103,6 +116,7 @@ impl SlashCommandPopup {
         }
     }
 
+    /// Confirm the currently highlighted command and store its action.
     pub fn select_current(&mut self) {
         if let Some(idx) = self.state.selected() {
             if let Some(name) = self.filtered.get(idx) {
@@ -114,6 +128,7 @@ impl SlashCommandPopup {
         }
     }
 
+    /// Render the popup above the given area.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open || self.filtered.is_empty() {
             return;

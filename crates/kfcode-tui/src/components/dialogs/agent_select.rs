@@ -1,3 +1,5 @@
+//! Dialog for selecting the active agent role.
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Metadata for a single selectable agent.
 #[derive(Clone, Debug)]
 pub struct Agent {
     pub name: String,
@@ -15,6 +18,7 @@ pub struct Agent {
     pub color: ratatui::style::Color,
 }
 
+/// Dialog that lists available agents and lets the user pick one.
 pub struct AgentSelectDialog {
     agents: Vec<Agent>,
     state: ListState,
@@ -22,6 +26,7 @@ pub struct AgentSelectDialog {
 }
 
 impl AgentSelectDialog {
+    /// Creates a new dialog pre-populated with the built-in agent list.
     pub fn new() -> Self {
         let agents = vec![
             Agent {
@@ -66,27 +71,33 @@ impl AgentSelectDialog {
         }
     }
 
+    /// Replaces the agent list with a custom set.
     pub fn set_agents(&mut self, agents: Vec<Agent>) {
         self.agents = agents;
     }
 
+    /// Returns a slice of all available agents.
     pub fn agents(&self) -> &[Agent] {
         &self.agents
     }
 
+    /// Opens the dialog and resets the selection to the first item.
     pub fn open(&mut self) {
         self.open = true;
         self.state.select(Some(0));
     }
 
+    /// Closes the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -95,6 +106,7 @@ impl AgentSelectDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.agents.len().saturating_sub(1) {
@@ -103,10 +115,12 @@ impl AgentSelectDialog {
         }
     }
 
+    /// Returns a reference to the currently highlighted agent, if any.
     pub fn selected_agent(&self) -> Option<&Agent> {
         self.state.selected().and_then(|i| self.agents.get(i))
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

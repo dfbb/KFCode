@@ -1,3 +1,5 @@
+//! Tool implementation for searching file contents with regular expressions.
+
 use async_trait::async_trait;
 use regex::Regex;
 use std::fs::File;
@@ -10,11 +12,13 @@ use crate::{Metadata, Tool, ToolContext, ToolError, ToolResult};
 
 const MAX_LINE_LENGTH: usize = 2000;
 
+/// Tool that searches file contents using regular expressions.
 pub struct GrepTool {
     directory: PathBuf,
 }
 
 impl GrepTool {
+    /// Creates a new `GrepTool` rooted at the current working directory.
     pub fn new() -> Self {
         Self {
             directory: std::env::current_dir().unwrap_or_default(),

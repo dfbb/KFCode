@@ -1,3 +1,5 @@
+//! Keyboard shortcut reference dialog.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,27 +10,33 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Dialog that displays a static list of keyboard shortcuts.
 pub struct HelpDialog {
     open: bool,
 }
 
 impl HelpDialog {
+    /// Creates a new, closed help dialog.
     pub fn new() -> Self {
         Self { open: false }
     }
 
+    /// Makes the dialog visible.
     pub fn open(&mut self) {
         self.open = true;
     }
 
+    /// Hides the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

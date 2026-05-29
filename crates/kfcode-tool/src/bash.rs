@@ -1,3 +1,5 @@
+//! Tool implementation for executing shell commands with permission checking and output streaming.
+
 use async_trait::async_trait;
 use std::collections::HashSet;
 use std::process::Stdio;
@@ -30,9 +32,11 @@ async fn kill_process_tree(pid: u32) {
         .await;
 }
 
+/// Tool that executes bash commands in a specified working directory.
 pub struct BashTool;
 
 impl BashTool {
+    /// Creates a new `BashTool` instance.
     pub fn new() -> Self {
         Self
     }
@@ -331,6 +335,7 @@ struct ParsedCommand {
     directories: Vec<String>,
 }
 
+/// Commands that accept path arguments and may reference external directories.
 const PATH_COMMANDS: &[&str] = &[
     "cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat",
 ];

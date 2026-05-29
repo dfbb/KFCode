@@ -1,3 +1,5 @@
+//! Dialog components used throughout the TUI, plus shared layout helpers.
+
 use ratatui::layout::Rect;
 
 mod agent_select;
@@ -25,6 +27,7 @@ const DIALOG_VIEWPORT_MARGIN_Y: u16 = 1;
 const DIALOG_INNER_PADDING_X: u16 = 1;
 const DIALOG_INNER_PADDING_Y: u16 = 0;
 
+/// Returns a centered `Rect` of the requested size within `area`, clamped to the viewport.
 pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     let viewport = inset_rect(area, DIALOG_VIEWPORT_MARGIN_X, DIALOG_VIEWPORT_MARGIN_Y);
     if viewport.width == 0 || viewport.height == 0 {
@@ -42,6 +45,7 @@ pub(super) fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     }
 }
 
+/// Returns the inner content area of a dialog block after applying standard padding.
 pub(super) fn dialog_inner(area: Rect) -> Rect {
     inset_rect(area, DIALOG_INNER_PADDING_X, DIALOG_INNER_PADDING_Y)
 }

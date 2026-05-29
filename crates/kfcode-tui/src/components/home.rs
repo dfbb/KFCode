@@ -1,3 +1,5 @@
+//! Home screen rendered when no session is active.
+
 use std::sync::Arc;
 
 use ratatui::{
@@ -55,21 +57,25 @@ const HOME_MAX_CONTENT_WIDTH: u16 = 75;
 const HOME_OUTER_H_PADDING: u16 = 2;
 const HOME_OUTER_V_PADDING: u16 = 1;
 
+/// The welcome screen shown before any session is opened.
 pub struct HomeView {
     context: Arc<AppContext>,
 }
 
 impl HomeView {
+    /// Create a new home view bound to the given application context.
     pub fn new(context: Arc<AppContext>) -> Self {
         Self { context }
     }
 
+    /// Render the home screen with a default placeholder prompt.
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         let prompt = Prompt::new(self.context.clone())
             .with_placeholder("Ask anything... \"Fix a TODO in the codebase\"");
         self.render_with_prompt(frame, area, &prompt);
     }
 
+    /// Render the home screen using the supplied prompt widget.
     pub fn render_with_prompt(&self, frame: &mut Frame, area: Rect, prompt: &Prompt) {
         let area = Rect {
             x: area.x.saturating_add(HOME_OUTER_H_PADDING),

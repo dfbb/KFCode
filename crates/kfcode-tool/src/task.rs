@@ -1,11 +1,14 @@
+//! Tool for launching specialized subagent sessions to handle delegated tasks.
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{Metadata, PermissionRequest, Tool, ToolContext, ToolError, ToolResult};
 
+/// Delegates a task to a named subagent running in its own session.
 pub struct TaskTool;
 
 impl TaskTool {
+    /// Creates a new `TaskTool`.
     pub fn new() -> Self {
         Self
     }
@@ -17,6 +20,7 @@ impl Default for TaskTool {
     }
 }
 
+/// Deserialized input for a task invocation.
 #[derive(Debug, Serialize, Deserialize)]
 struct TaskInput {
     description: String,
@@ -157,12 +161,14 @@ impl Tool for TaskTool {
     }
 }
 
+/// Static metadata about a known agent type.
 struct AgentInfo {
     name: String,
     model: Option<AgentModel>,
     can_use_task: bool,
 }
 
+/// Model identifier split into provider and model components.
 struct AgentModel {
     model_id: String,
     provider_id: String,

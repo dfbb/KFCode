@@ -1,3 +1,5 @@
+//! Non-blocking alert dialog for displaying informational, success, warning, or error messages.
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,13 +10,19 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Severity level of an alert.
 pub enum AlertType {
+    /// Neutral informational message.
     Info,
+    /// Operation completed successfully.
     Success,
+    /// Non-fatal warning that requires attention.
     Warning,
+    /// Error that the user should act on.
     Error,
 }
 
+/// Dialog that displays a titled message with a severity-colored border.
 pub struct AlertDialog {
     title: String,
     message: String,
@@ -23,6 +31,7 @@ pub struct AlertDialog {
 }
 
 impl AlertDialog {
+    /// Creates a new alert with the given title, message, and severity.
     pub fn new(title: &str, message: &str, alert_type: AlertType) -> Self {
         Self {
             title: title.to_string(),
@@ -32,38 +41,47 @@ impl AlertDialog {
         }
     }
 
+    /// Creates an info-level alert.
     pub fn info(message: &str) -> Self {
         Self::new("Info", message, AlertType::Info)
     }
 
+    /// Creates a success-level alert.
     pub fn success(message: &str) -> Self {
         Self::new("Success", message, AlertType::Success)
     }
 
+    /// Creates a warning-level alert.
     pub fn warning(message: &str) -> Self {
         Self::new("Warning", message, AlertType::Warning)
     }
 
+    /// Creates an error-level alert.
     pub fn error(message: &str) -> Self {
         Self::new("Error", message, AlertType::Error)
     }
 
+    /// Makes the dialog visible.
     pub fn open(&mut self) {
         self.open = true;
     }
 
+    /// Hides the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Replaces the displayed message text.
     pub fn set_message(&mut self, message: &str) {
         self.message = message.to_string();
     }
 
+    /// Returns the current message text.
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -86,6 +104,7 @@ impl AlertDialog {
         }
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

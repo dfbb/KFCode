@@ -1,3 +1,5 @@
+//! Dialog for browsing and restoring stashed prompt inputs.
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
@@ -8,12 +10,14 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// A single saved prompt entry in the stash.
 #[derive(Clone, Debug)]
 pub struct StashItem {
     pub input: String,
     pub created_at: i64,
 }
 
+/// Dialog that lists stashed prompts and lets the user load or delete them.
 pub struct PromptStashDialog {
     entries: Vec<StashItem>,
     filtered: Vec<usize>,
@@ -23,6 +27,7 @@ pub struct PromptStashDialog {
 }
 
 impl PromptStashDialog {
+    /// Creates a new, closed stash dialog with no entries.
     pub fn new() -> Self {
         let mut state = ListState::default();
         state.select(Some(0));
@@ -35,35 +40,42 @@ impl PromptStashDialog {
         }
     }
 
+    /// Replaces the stash entries and re-applies the current filter.
     pub fn set_entries(&mut self, entries: Vec<StashItem>) {
         self.entries = entries;
         self.filter();
     }
 
+    /// Opens the dialog and clears the search query.
     pub fn open(&mut self) {
         self.open = true;
         self.query.clear();
         self.filter();
     }
 
+    /// Closes the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Appends a character to the search query and re-filters.
     pub fn handle_input(&mut self, c: char) {
         self.query.push(c);
         self.filter();
     }
 
+    /// Removes the last character from the search query and re-filters.
     pub fn handle_backspace(&mut self) {
         self.query.pop();
         self.filter();
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -72,6 +84,7 @@ impl PromptStashDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.filtered.len().saturating_sub(1) {
@@ -80,6 +93,7 @@ impl PromptStashDialog {
         }
     }
 
+    /// Returns the index into `entries` of the currently highlighted item, if any.
     pub fn selected_index(&self) -> Option<usize> {
         self.state
             .selected()
@@ -87,6 +101,7 @@ impl PromptStashDialog {
             .copied()
     }
 
+    /// Removes the currently selected entry and returns its original index, if any.
     pub fn remove_selected(&mut self) -> Option<usize> {
         let index = self.selected_index()?;
         if index >= self.entries.len() {
@@ -113,6 +128,7 @@ impl PromptStashDialog {
         });
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

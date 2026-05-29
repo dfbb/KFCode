@@ -1,3 +1,5 @@
+//! Two-button confirmation dialog for destructive or irreversible actions.
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Dialog that asks the user to confirm or cancel an action.
 pub struct ConfirmDialog {
     title: String,
     message: String,
@@ -18,6 +21,7 @@ pub struct ConfirmDialog {
 }
 
 impl ConfirmDialog {
+    /// Creates a new confirm dialog with the given title and message.
     pub fn new(title: &str, message: &str) -> Self {
         Self {
             title: title.to_string(),
@@ -29,35 +33,43 @@ impl ConfirmDialog {
         }
     }
 
+    /// Opens the dialog with focus on the Cancel button.
     pub fn open(&mut self) {
         self.open = true;
         self.focused = false;
     }
 
+    /// Closes the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Toggles focus between the Cancel and Confirm buttons.
     pub fn toggle_focus(&mut self) {
         self.focused = !self.focused;
     }
 
+    /// Returns `true` if the Confirm button is currently focused.
     pub fn is_confirm(&self) -> bool {
         self.focused
     }
 
+    /// Moves focus to the Cancel button.
     pub fn handle_left(&mut self) {
         self.focused = false;
     }
 
+    /// Moves focus to the Confirm button.
     pub fn handle_right(&mut self) {
         self.focused = true;
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

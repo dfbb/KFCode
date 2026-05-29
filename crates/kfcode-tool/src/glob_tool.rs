@@ -1,3 +1,5 @@
+//! Tool implementation for finding files by glob pattern, sorted by modification time.
+
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -5,11 +7,13 @@ use walkdir::WalkDir;
 
 use crate::{Metadata, Tool, ToolContext, ToolError, ToolResult};
 
+/// Tool that matches files against a glob pattern and returns results sorted by recency.
 pub struct GlobTool {
     directory: PathBuf,
 }
 
 impl GlobTool {
+    /// Creates a new `GlobTool` rooted at the current working directory.
     pub fn new() -> Self {
         Self {
             directory: std::env::current_dir().unwrap_or_default(),

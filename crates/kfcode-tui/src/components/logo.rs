@@ -1,3 +1,5 @@
+//! ASCII art logo rendered on the home screen.
+
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -87,6 +89,7 @@ fn parse_logo_line(line: &str, fg_color: Color, bg_color: Color, bold: bool) -> 
     spans
 }
 
+/// Two-part ASCII logo widget rendered centered on the home screen.
 pub struct Logo {
     primary_color: Color,
     muted_color: Color,
@@ -94,6 +97,7 @@ pub struct Logo {
 }
 
 impl Logo {
+    /// Create a logo with the given text, muted, and background colors.
     pub fn new(text_color: Color, text_muted_color: Color, bg_color: Color) -> Self {
         Self {
             primary_color: text_color,
@@ -102,6 +106,7 @@ impl Logo {
         }
     }
 
+    /// Render the logo centered within the given area.
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         let mut lines = Vec::new();
 

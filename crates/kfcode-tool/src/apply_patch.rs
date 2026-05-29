@@ -1,3 +1,5 @@
+//! Tool implementation for applying unified diff patches to files.
+
 use async_trait::async_trait;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -6,16 +8,19 @@ use std::path::{Path, PathBuf};
 
 use crate::{Metadata, PermissionRequest, Tool, ToolContext, ToolError, ToolResult};
 
+/// Tool that applies unified diff patches to one or more files.
 pub struct ApplyPatchTool;
 #[cfg(feature = "lsp")]
 const MAX_DIAGNOSTICS_PER_FILE: usize = 20;
 
+// Deserialized input for the apply_patch tool call.
 #[derive(Debug, Serialize, Deserialize)]
 struct ApplyPatchInput {
     #[serde(rename = "patchText")]
     patch_text: String,
 }
 
+// Describes what kind of change a file patch represents.
 #[derive(Debug, Clone)]
 enum PatchOperation {
     Add,
@@ -30,6 +35,7 @@ impl PatchOperation {
     }
 }
 
+// A parsed patch for a single file, containing its operation and hunks.
 #[derive(Debug, Clone)]
 struct FilePatch {
     path: String,
@@ -37,6 +43,7 @@ struct FilePatch {
     hunks: Vec<Hunk>,
 }
 
+// A single contiguous block of changes within a file patch.
 #[derive(Debug, Clone)]
 struct Hunk {
     old_start: usize,
@@ -46,6 +53,7 @@ struct Hunk {
     lines: Vec<PatchLine>,
 }
 
+// A single line within a hunk, tagged by its role in the diff.
 #[derive(Debug, Clone)]
 enum PatchLine {
     Context(#[allow(dead_code)] String),
@@ -278,6 +286,7 @@ impl Tool for ApplyPatchTool {
     }
 }
 
+// Holds the computed before/after state and diff for a single file change.
 struct FileChange {
     relative_path: String,
     operation: PatchOperation,

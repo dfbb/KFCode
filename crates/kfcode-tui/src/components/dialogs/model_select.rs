@@ -1,3 +1,5 @@
+//! Dialog for selecting the active language model.
+
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -8,6 +10,7 @@ use ratatui::{
 
 use crate::theme::Theme;
 
+/// Metadata for a single selectable language model.
 #[derive(Clone, Debug)]
 pub struct Model {
     pub id: String,
@@ -16,6 +19,7 @@ pub struct Model {
     pub context_window: u64,
 }
 
+/// Dialog that lists available models with a live search filter.
 pub struct ModelSelectDialog {
     models: Vec<Model>,
     filtered: Vec<usize>,
@@ -25,6 +29,7 @@ pub struct ModelSelectDialog {
 }
 
 impl ModelSelectDialog {
+    /// Creates a new dialog pre-populated with a default set of models.
     pub fn new() -> Self {
         let models = vec![
             Model {
@@ -102,11 +107,13 @@ impl ModelSelectDialog {
         }
     }
 
+    /// Replaces the model list and resets the filter.
     pub fn set_models(&mut self, models: Vec<Model>) {
         self.models = models;
         self.filtered = (0..self.models.len()).collect();
     }
 
+    /// Opens the dialog and resets the search query.
     pub fn open(&mut self) {
         self.open = true;
         self.query.clear();
@@ -114,24 +121,29 @@ impl ModelSelectDialog {
         self.state.select(Some(0));
     }
 
+    /// Closes the dialog.
     pub fn close(&mut self) {
         self.open = false;
     }
 
+    /// Returns `true` if the dialog is currently visible.
     pub fn is_open(&self) -> bool {
         self.open
     }
 
+    /// Appends a character to the search query and re-filters the list.
     pub fn handle_input(&mut self, c: char) {
         self.query.push(c);
         self.filter();
     }
 
+    /// Removes the last character from the search query and re-filters.
     pub fn handle_backspace(&mut self) {
         self.query.pop();
         self.filter();
     }
 
+    /// Moves the selection one row up.
     pub fn move_up(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected > 0 {
@@ -140,6 +152,7 @@ impl ModelSelectDialog {
         }
     }
 
+    /// Moves the selection one row down.
     pub fn move_down(&mut self) {
         if let Some(selected) = self.state.selected() {
             if selected < self.filtered.len().saturating_sub(1) {
@@ -148,6 +161,7 @@ impl ModelSelectDialog {
         }
     }
 
+    /// Returns a reference to the currently highlighted model, if any.
     pub fn selected_model(&self) -> Option<&Model> {
         self.state
             .selected()
@@ -176,6 +190,7 @@ impl ModelSelectDialog {
         }
     }
 
+    /// Renders the dialog into `frame` if it is open.
     pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.open {
             return;

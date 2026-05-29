@@ -1,3 +1,4 @@
+//! Central registry that stores, looks up, and executes registered tools.
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -8,27 +9,32 @@ use kfcode_plugin::{HookContext, HookEvent};
 /// Tools that should not appear in suggestion lists when a tool is not found.
 const FILTERED_FROM_SUGGESTIONS: &[&str] = &["invalid", "patch", "batch"];
 
+/// Thread-safe map from tool ID to boxed tool implementation.
 pub struct ToolRegistry {
     tools: RwLock<HashMap<String, Arc<dyn Tool>>>,
 }
 
 impl ToolRegistry {
+    /// Creates an empty `ToolRegistry`.
     pub fn new() -> Self {
         Self {
             tools: RwLock::new(HashMap::new()),
         }
     }
 
+    /// Registers a tool, replacing any existing tool with the same ID.
     pub async fn register<T: Tool + 'static>(&self, tool: T) {
         let mut tools = self.tools.write().await;
         tools.insert(tool.id().to_string(), Arc::new(tool));
     }
 
+    /// Returns the tool with the given ID, or `None` if not registered.
     pub async fn get(&self, id: &str) -> Option<Arc<dyn Tool>> {
         let tools = self.tools.read().await;
         tools.get(id).cloned()
     }
 
+    /// Returns all registered tools.
     pub async fn list(&self) -> Vec<Arc<dyn Tool>> {
         let tools = self.tools.read().await;
         tools.values().cloned().collect()
@@ -53,6 +59,7 @@ impl ToolRegistry {
         names
     }
 
+    /// Returns JSON schema descriptors for all registered tools, after running plugin hooks.
     pub async fn list_schemas(&self) -> Vec<ToolSchema> {
         let tools = self.tools.read().await;
         let mut schemas: Vec<ToolSchema> = tools
@@ -83,6 +90,7 @@ impl ToolRegistry {
         schemas
     }
 
+    /// Looks up and executes a tool by ID, running before/after plugin hooks around the call.
     pub async fn execute(
         &self,
         tool_id: &str,
@@ -210,6 +218,7 @@ impl Default for ToolRegistry {
     }
 }
 
+/// JSON schema descriptor for a single tool, used when advertising tools to the model.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ToolSchema {
     pub name: String,
@@ -217,6 +226,7 @@ pub struct ToolSchema {
     pub parameters: serde_json::Value,
 }
 
+/// Builds and returns a `ToolRegistry` pre-populated with all built-in tools.
 pub async fn create_default_registry() -> ToolRegistry {
     let registry = ToolRegistry::new();
 

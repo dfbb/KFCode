@@ -1,3 +1,5 @@
+//! Tool implementation for performing string replacements in files with fallback matching strategies.
+
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -8,11 +10,13 @@ use crate::{with_file_lock, Metadata, Tool, ToolContext, ToolError, ToolResult};
 #[cfg(feature = "lsp")]
 const MAX_DIAGNOSTICS_PER_FILE: usize = 20;
 
+/// Tool that replaces a string in a file using a cascade of matching strategies.
 pub struct EditTool {
     directory: PathBuf,
 }
 
 impl EditTool {
+    /// Creates a new `EditTool` rooted at the current working directory.
     pub fn new() -> Self {
         Self {
             directory: std::env::current_dir().unwrap_or_default(),

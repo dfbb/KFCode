@@ -1,3 +1,8 @@
+//! System prompt construction and model-specific prompt selection.
+//!
+//! `SystemPrompt` mirrors the TypeScript `SystemPrompt` class: selects the
+//! correct prompt template for a model and builds the environment context block.
+
 use chrono::Local;
 
 // Embed prompt templates at compile time (matching TS originals from session/prompt/*.txt)
@@ -9,6 +14,7 @@ const PROMPT_CODEX: &str = include_str!("prompt_templates/codex_header.txt");
 const PROMPT_TRINITY: &str = include_str!("prompt_templates/trinity.txt");
 const MAX_MCP_RESOURCE_CHARS: usize = 12_000;
 
+/// Builds system prompt strings for different models and contexts.
 pub struct SystemPrompt;
 
 impl SystemPrompt {
@@ -113,17 +119,23 @@ impl SystemPrompt {
 }
 
 /// Context needed to build the environment block in the system prompt.
+/// Runtime context used to build the `<env>` block in the system prompt.
 #[derive(Debug, Clone)]
 pub struct EnvironmentContext {
+    /// Model API identifier (e.g. `"claude-sonnet-4-20250514"`).
     pub model_api_id: String,
+    /// Provider identifier (e.g. `"anthropic"`).
     pub provider_id: String,
+    /// Absolute path of the working directory.
     pub working_directory: String,
+    /// Whether the working directory is inside a git repository.
     pub is_git_repo: bool,
+    /// Operating system name (e.g. `"linux"`, `"macos"`).
     pub platform: String,
 }
 
 impl EnvironmentContext {
-    /// Build from the current runtime environment.
+    /// Build from the current runtime environment, detecting git status automatically.
     pub fn from_current(
         model_api_id: impl Into<String>,
         provider_id: impl Into<String>,

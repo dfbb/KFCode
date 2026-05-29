@@ -1,3 +1,4 @@
+//! Tool for fetching web content and returning it as text, markdown, or HTML.
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -8,11 +9,13 @@ const MAX_RESPONSE_SIZE: usize = 5 * 1024 * 1024;
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 const MAX_TIMEOUT_SECS: u64 = 120;
 
+/// Fetches a URL and returns its content in the requested format.
 pub struct WebFetchTool {
     client: Client,
 }
 
 impl WebFetchTool {
+    /// Creates a `WebFetchTool` with a browser-like user-agent and a long timeout.
     pub fn new() -> Self {
         Self {
             client: Client::builder()
@@ -24,6 +27,7 @@ impl WebFetchTool {
     }
 }
 
+/// Deserialized input for a web-fetch request.
 #[derive(Debug, Serialize, Deserialize)]
 struct WebFetchInput {
     url: String,

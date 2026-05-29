@@ -1,3 +1,5 @@
+//! Prompt input widget with history, frecency-ranked autocomplete, and stash.
+
 use ratatui::prelude::Stylize;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -35,12 +37,16 @@ const PROMPT_BLOCK_PAD_TOP: u16 = 1;
 const PROMPT_BLOCK_PAD_BOTTOM: u16 = 1;
 const PROMPT_LINE_H_INSET: u16 = 1;
 
+/// Input mode for the prompt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptMode {
+    /// Standard chat input mode.
     Normal,
+    /// Shell command mode (activated by typing `!`).
     Shell,
 }
 
+/// A saved prompt draft that can be restored later.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PromptStashEntry {
     pub input: String,
@@ -68,6 +74,7 @@ struct StashStore {
     entries: Vec<PromptStashEntry>,
 }
 
+/// The main text input widget used throughout the application.
 pub struct Prompt {
     context: Arc<AppContext>,
     input: String,
@@ -95,6 +102,7 @@ pub struct Prompt {
 }
 
 impl Prompt {
+    /// Create a new prompt bound to the given application context, loading persisted history.
     pub fn new(context: Arc<AppContext>) -> Self {
         let state_dir = prompt_state_dir();
         let history_path = state_dir.join("prompt-history.json");
@@ -186,11 +194,13 @@ impl Prompt {
         prompt
     }
 
+    /// Override the placeholder text shown when the input is empty.
     pub fn with_placeholder(mut self, placeholder: &str) -> Self {
         self.placeholder = placeholder.to_string();
         self
     }
 
+    /// Replace the known agent list used for `@agent` autocomplete.
     pub fn set_agent_suggestions(&mut self, agents: Vec<String>) {
         if agents.is_empty() {
             return;
@@ -199,11 +209,13 @@ impl Prompt {
         self.recompute_suggestions();
     }
 
+    /// Replace the known skill list used for `/skill` autocomplete.
     pub fn set_skill_suggestions(&mut self, skills: Vec<String>) {
         self.known_skills = dedup_sort(skills);
         self.recompute_suggestions();
     }
 
+    /// Render the prompt widget into the given area.
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         let theme = self.context.theme.read();
         let agent = self.context.current_agent.read();
@@ -363,12 +375,14 @@ impl Prompt {
         frame.render_widget(status_line, inset_horizontal(chunks[3], PROMPT_LINE_H_INSET));
     }
 
+    /// Advance the spinner animation by `delta_ms` milliseconds; returns true if a redraw is needed.
     pub fn tick_spinner(&mut self, delta_ms: u64) -> bool {
         let spinner_changed = self.spinner.advance(delta_ms);
         let interrupt_changed = self.maybe_reset_interrupt_confirmation();
         spinner_changed || interrupt_changed
     }
 
+    /// Activate or deactivate the spinner.
     pub fn set_spinner_active(&mut self, active: bool) {
         self.spinner.set_active(active);
         if !active {
@@ -376,22 +390,27 @@ impl Prompt {
         }
     }
 
+    /// Returns true if the spinner is currently active.
     pub fn spinner_active(&self) -> bool {
         self.spinner.is_active()
     }
 
+    /// Set the task kind displayed by the spinner.
     pub fn set_spinner_task_kind(&mut self, task_kind: TaskKind) {
         self.spinner.set_task_kind(task_kind);
     }
 
+    /// Return the current spinner task kind.
     pub fn spinner_task_kind(&self) -> TaskKind {
         self.spinner.task_kind()
     }
 
+    /// Change the spinner color.
     pub fn set_spinner_color(&mut self, color: Color) {
         self.spinner.set_color(color);
     }
 
+    /// Process a keyboard event; returns true if the user submitted input.
     pub fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
         use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -478,30 +497,37 @@ impl Prompt {
         false
     }
 
+    /// Navigate to the previous history entry.
     pub fn history_previous_entry(&mut self) {
         self.history_previous();
     }
 
+    /// Navigate to the next history entry.
     pub fn history_next_entry(&mut self) {
         self.history_next();
     }
 
+    /// Cycle to the next autocomplete suggestion.
     pub fn autocomplete_next(&mut self) {
         self.apply_autocomplete_next();
     }
 
+    /// Cycle to the previous autocomplete suggestion.
     pub fn autocomplete_previous(&mut self) {
         self.apply_autocomplete_previous();
     }
 
+    /// Return the current input text without consuming it.
     pub fn get_input(&self) -> &str {
         &self.input
     }
 
+    /// Current byte offset of the cursor within the input string.
     pub fn cursor_position(&self) -> usize {
         self.cursor_position
     }
 
+    /// Consume and return the current input, persisting it to history.
     pub fn take_input(&mut self) -> String {
         let input = std::mem::take(&mut self.input);
         let trimmed = input.trim();
@@ -526,6 +552,7 @@ impl Prompt {
         input
     }
 
+    /// Clear the input without saving to history.
     pub fn clear(&mut self) {
         self.input.clear();
         self.cursor_position = 0;
@@ -537,14 +564,17 @@ impl Prompt {
         self.reset_interrupt_confirmation();
     }
 
+    /// Set whether the prompt has keyboard focus.
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
     }
 
+    /// Returns true if the prompt currently has keyboard focus.
     pub fn is_focused(&self) -> bool {
         self.focused
     }
 
+    /// Replace the entire input with the given text and move the cursor to the end.
     pub fn set_input(&mut self, input: String) {
         self.input = input;
         self.cursor_position = self.input.len();
@@ -554,18 +584,22 @@ impl Prompt {
         self.recompute_suggestions();
     }
 
+    /// Return the current input mode.
     pub fn mode(&self) -> PromptMode {
         self.mode
     }
 
+    /// Returns true when the prompt is in shell mode.
     pub fn is_shell_mode(&self) -> bool {
         matches!(self.mode, PromptMode::Shell)
     }
 
+    /// Switch back to normal mode from shell mode.
     pub fn exit_shell_mode(&mut self) {
         self.mode = PromptMode::Normal;
     }
 
+    /// Record an Escape/interrupt keypress; returns true if a second press confirms interruption.
     pub fn register_interrupt_keypress(&mut self) -> bool {
         if self.interrupt_confirmation_active() {
             self.reset_interrupt_confirmation();
@@ -576,10 +610,12 @@ impl Prompt {
         false
     }
 
+    /// Reset the interrupt confirmation state.
     pub fn clear_interrupt_confirmation(&mut self) {
         self.reset_interrupt_confirmation();
     }
 
+    /// Insert text at the current cursor position.
     pub fn insert_text(&mut self, text: &str) {
         self.input.insert_str(self.cursor_position, text);
         self.cursor_position = self.cursor_position.saturating_add(text.len());
@@ -587,6 +623,7 @@ impl Prompt {
         self.recompute_suggestions();
     }
 
+    /// Compute the total widget height needed for the current input at the given terminal width.
     pub fn desired_height(&self, width: u16) -> u16 {
         self.input_display_lines(width)
             .saturating_add(PROMPT_BLOCK_PAD_TOP)
@@ -594,6 +631,7 @@ impl Prompt {
             .saturating_add(3)
     }
 
+    /// Save the current input to the stash and clear the prompt; returns false if input is empty.
     pub fn stash_current(&mut self) -> bool {
         if self.input.trim().is_empty() {
             return false;
@@ -612,10 +650,12 @@ impl Prompt {
         true
     }
 
+    /// Return all stash entries.
     pub fn stash_entries(&self) -> &[PromptStashEntry] {
         &self.stash
     }
 
+    /// Remove and return the most recent stash entry.
     pub fn pop_stash(&mut self) -> Option<PromptStashEntry> {
         let entry = self.stash.pop();
         if entry.is_some() {
@@ -624,6 +664,7 @@ impl Prompt {
         entry
     }
 
+    /// Remove the stash entry at the given index; returns false if out of bounds.
     pub fn remove_stash(&mut self, index: usize) -> bool {
         if index >= self.stash.len() {
             return false;
@@ -633,6 +674,7 @@ impl Prompt {
         true
     }
 
+    /// Load the stash entry at the given index into the input; returns false if out of bounds.
     pub fn load_stash(&mut self, index: usize) -> bool {
         let Some(entry) = self.stash.get(index) else {
             return false;

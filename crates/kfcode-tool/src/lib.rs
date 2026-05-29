@@ -1,3 +1,5 @@
+//! Tool implementations for the kfcode agent, including file editing, shell execution, search, and LSP integration.
+
 pub mod apply_patch;
 pub mod bash;
 pub mod batch;

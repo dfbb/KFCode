@@ -1,3 +1,5 @@
+//! Animated spinner widget supporting braille and knight-rider scan modes.
+
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -14,18 +16,26 @@ const KNIGHT_RIDER_FRAME_INTERVAL_MS: u64 = 40;
 const BRAILLE_FRAME_INTERVAL_MS: u64 = 80;
 const BRAILLE_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+/// The kind of background task the spinner represents.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TaskKind {
+    /// Waiting for an LLM request to be sent.
     #[default]
     LlmRequest,
+    /// Receiving an LLM response stream.
     LlmResponse,
+    /// Reading a file.
     FileRead,
+    /// Writing a file.
     FileWrite,
+    /// Executing a shell command.
     CommandExec,
+    /// Executing a tool call.
     ToolCall,
 }
 
 impl TaskKind {
+    /// Unicode glyph used when this task kind is active.
     pub fn shape(self) -> &'static str {
         match self {
             Self::LlmRequest => "◆",
@@ -37,15 +47,19 @@ impl TaskKind {
         }
     }
 
+    /// Glyph used for inactive positions.
     pub fn inactive_shape() -> &'static str {
         "·"
     }
 }
 
+/// Animation style for the spinner.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SpinnerMode {
+    /// Braille dot cycling animation.
     #[default]
     Braille,
+    /// Knight-rider scanning bar animation.
     KnightRider,
 }
 
@@ -57,6 +71,7 @@ struct ScannerState {
     is_moving_forward: bool,
 }
 
+/// Animated spinner widget used in the prompt status row.
 #[derive(Clone, Debug)]
 pub struct KnightRiderSpinner {
     width: usize,
@@ -74,13 +89,16 @@ pub struct KnightRiderSpinner {
     tick_accumulator_ms: u64,
 }
 
+/// Type alias for the default spinner implementation.
 pub type Spinner = KnightRiderSpinner;
 
 impl KnightRiderSpinner {
+    /// Create a spinner with the default red color.
     pub fn new() -> Self {
         Self::with_color(Color::Rgb(255, 0, 0))
     }
 
+    /// Create a spinner with the given base color.
     pub fn with_color(base_color: Color) -> Self {
         let hold_start = DEFAULT_HOLD_START;
         let hold_end = DEFAULT_HOLD_END;
@@ -106,22 +124,27 @@ impl KnightRiderSpinner {
         }
     }
 
+    /// Activate or deactivate the spinner animation.
     pub fn set_active(&mut self, active: bool) {
         self.active = active;
     }
 
+    /// Returns true if the spinner is currently active.
     pub fn is_active(&self) -> bool {
         self.active
     }
 
+    /// Set the task kind displayed by the spinner glyph.
     pub fn set_task_kind(&mut self, task_kind: TaskKind) {
         self.task_kind = task_kind;
     }
 
+    /// Return the current task kind.
     pub fn task_kind(&self) -> TaskKind {
         self.task_kind
     }
 
+    /// Switch between braille and knight-rider animation modes.
     pub fn set_mode(&mut self, mode: SpinnerMode) {
         if self.mode == mode {
             return;
@@ -135,10 +158,12 @@ impl KnightRiderSpinner {
         };
     }
 
+    /// Return the current animation mode.
     pub fn mode(&self) -> SpinnerMode {
         self.mode
     }
 
+    /// Change the spinner's base color and recompute the trail palette.
     pub fn set_color(&mut self, color: Color) {
         if self.base_color == color {
             return;
@@ -148,10 +173,12 @@ impl KnightRiderSpinner {
         self.inactive_color = derive_inactive_color(color, 0.6);
     }
 
+    /// Override the per-frame interval in milliseconds.
     pub fn set_frame_interval_ms(&mut self, interval_ms: u64) {
         self.frame_interval_ms = interval_ms.max(1);
     }
 
+    /// Advance the frame counter by one tick; returns true if the frame changed.
     pub fn tick(&mut self) -> bool {
         let prev = self.frame_index;
         let total = match self.mode {
@@ -162,6 +189,7 @@ impl KnightRiderSpinner {
         self.frame_index != prev
     }
 
+    /// Accumulate elapsed time and tick as many frames as needed; returns true if any frame changed.
     pub fn advance(&mut self, delta_ms: u64) -> bool {
         if !self.active || delta_ms == 0 {
             return false;

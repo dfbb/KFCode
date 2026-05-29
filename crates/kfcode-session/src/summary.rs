@@ -1,3 +1,8 @@
+//! Session summarization: diff computation, title generation, and metadata persistence.
+//!
+//! Mirrors the TypeScript `SessionSummary` namespace: computes file diffs from
+//! step snapshots, generates per-message titles via LLM, and persists results.
+
 use serde::{Deserialize, Serialize};
 
 use kfcode_core::bus::Bus;
@@ -12,29 +17,43 @@ use crate::{MessageRole, PartType};
 // Data types
 // ============================================================================
 
+/// Aggregated diff statistics for a session.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SessionSummaryData {
+    /// Total lines added across all changed files.
     pub additions: u64,
+    /// Total lines deleted across all changed files.
     pub deletions: u64,
+    /// Number of files changed.
     pub files: u64,
+    /// Per-file diff details.
     pub diffs: Vec<SummaryFileDiff>,
 }
 
+/// Per-file diff statistics used in session summaries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SummaryFileDiff {
+    /// Relative file path (may be git-quoted; use `unquote_git_path` to decode).
     pub file: String,
+    /// Lines added in this file.
     pub additions: u64,
+    /// Lines deleted in this file.
     pub deletions: u64,
 }
 
+/// Request payload for LLM-based title generation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TitleGenerationRequest {
+    /// Session ID for which the title is being generated.
     pub session_id: String,
+    /// Message texts used as input for the title.
     pub messages: Vec<String>,
 }
 
+/// Response from LLM-based title generation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TitleGenerationResponse {
+    /// Generated session title.
     pub title: String,
 }
 
@@ -192,7 +211,9 @@ pub fn compute_diff(
 
 /// Input for the summarize operation.
 pub struct SummarizeInput {
+    /// Session being summarized.
     pub session_id: String,
+    /// User message ID whose assistant responses should be included in the diff.
     pub message_id: String,
 }
 
@@ -496,6 +517,7 @@ pub fn clean_diffs(diffs: Vec<SummaryFileDiff>) -> Vec<SummaryFileDiff> {
 // Title generation (simple fallback, LLM-based is in prompt.rs)
 // ============================================================================
 
+/// Generate a session title from the first few words of the first message.
 pub fn generate_title_from_messages(messages: &[String]) -> String {
     if messages.is_empty() {
         return "New Session".to_string();
@@ -520,13 +542,16 @@ pub fn generate_title_from_messages(messages: &[String]) -> String {
 // Legacy compatibility
 // ============================================================================
 
+/// Legacy compatibility wrapper around `SessionSummaryData`.
 pub struct SessionSummary;
 
 impl SessionSummary {
+    /// Create an empty `SessionSummaryData`.
     pub fn new() -> SessionSummaryData {
         SessionSummaryData::default()
     }
 
+    /// Build a `SessionSummaryData` from a list of file diffs.
     pub fn from_diffs(diffs: Vec<SummaryFileDiff>) -> SessionSummaryData {
         let additions = diffs.iter().map(|d| d.additions).sum();
         let deletions = diffs.iter().map(|d| d.deletions).sum();
@@ -540,6 +565,7 @@ impl SessionSummary {
         }
     }
 
+    /// Combine two `SessionSummaryData` values by summing their statistics.
     pub fn merge(a: &SessionSummaryData, b: &SessionSummaryData) -> SessionSummaryData {
         let mut diffs = a.diffs.clone();
         diffs.extend(b.diffs.clone());
