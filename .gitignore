@@ -5,3 +5,5 @@ target/
 # Secrets / tokens — never commit
 *token*.txt
 *.token
+.claire/
+.claude/
