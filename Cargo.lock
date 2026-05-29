@@ -1761,7 +1761,9 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
+ "tokio-test",
  "tracing",
 ]
 
@@ -1821,9 +1823,11 @@ dependencies = [
  "lsp-types",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
+ "tokio-test",
  "tracing",
  "url",
 ]
@@ -1873,6 +1877,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-test",
 ]
 
 [[package]]
@@ -1927,6 +1932,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "bytes",
  "chrono",
  "dirs",
  "futures",
@@ -1941,11 +1947,14 @@ dependencies = [
  "kfcode-types",
  "once_cell",
  "portable-pty",
+ "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
+ "tokio-test",
  "tokio-tungstenite 0.26.2",
  "tower",
  "tower-http",
@@ -2035,10 +2044,12 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-test",
  "tokio-util",
  "tracing",
  "tree-sitter",
  "tree-sitter-bash",
+ "url",
  "urlencoding",
  "uuid",
  "walkdir",
@@ -2129,6 +2140,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-test",
  "tracing",
 ]
 
