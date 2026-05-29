@@ -2,6 +2,7 @@
 
 use chrono::Utc;
 use kfcode_storage::{Database, DatabaseError};
+use kfcode_types::message::{MessageRole, SessionMessage};
 use kfcode_types::session::{Session, SessionStatus, SessionTime};
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -19,6 +20,17 @@ pub async fn fresh_tempdir_db() -> (Database, TempDir) {
 }
 
 pub use kfcode_storage::DatabaseError as DbErr;
+
+pub fn make_message(id: &str, session_id: &str, role: MessageRole) -> SessionMessage {
+    SessionMessage {
+        id: id.to_string(),
+        session_id: session_id.to_string(),
+        role,
+        parts: Vec::new(),
+        created_at: Utc::now(),
+        metadata: HashMap::new(),
+    }
+}
 
 pub fn make_session(id: &str, project_id: &str) -> Session {
     let now = Utc::now();
