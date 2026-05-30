@@ -55,7 +55,7 @@ async fn download_to(client: &reqwest::Client, url: &str, dest: &Path) -> anyhow
         .error_for_status()?
         .bytes()
         .await?;
-    std::fs::write(dest, &bytes).with_context(|| format!("写入下载文件失败: {}", dest.display()))?;
+    std::fs::write(dest, &bytes).with_context(|| format!("failed to write download to {}", dest.display()))?;
     Ok(())
 }
 
@@ -140,7 +140,7 @@ fn extract_binary(archive: &Path, asset: &PlatformAsset, out_dir: &Path) -> anyh
         let mut zip = zip::ZipArchive::new(file)?;
         let mut entry = zip
             .by_name(&inner_rel)
-            .with_context(|| format!("压缩包内未找到 {inner_rel}"))?;
+            .with_context(|| format!("{inner_rel} not found in archive"))?;
         let dest = out_dir.join(asset.binary_name);
         let mut out = std::fs::File::create(&dest)?;
         std::io::copy(&mut entry, &mut out)?;
@@ -158,7 +158,7 @@ fn extract_binary(archive: &Path, asset: &PlatformAsset, out_dir: &Path) -> anyh
                 return Ok(dest);
             }
         }
-        Err(anyhow!("压缩包内未找到 {inner_rel}"))
+        Err(anyhow!("{inner_rel} not found in archive"))
     }
 }
 
@@ -170,7 +170,7 @@ mod extract_tests {
     fn extracts_binary_from_targz() {
         let tmp = tempfile::tempdir().unwrap();
         let archive = tmp.path().join("a.tar.gz");
-        // 构造一个含 kfcode-cli-<triple>/kfcode 的 tar.gz
+        // build a tar.gz containing kfcode-cli-<triple>/kfcode
         let asset = resolve_asset_for("linux", "x86_64").unwrap();
         {
             let f = std::fs::File::create(&archive).unwrap();
@@ -204,7 +204,7 @@ mod extract_tests {
 pub async fn perform_upgrade(version: &str) -> anyhow::Result<()> {
     let asset = resolve_current_asset().ok_or_else(|| {
         anyhow!(
-            "当前平台 {}-{} 无对应发布产物,无法自动升级",
+            "no release asset for {}-{}; automatic upgrade is not supported on this platform",
             std::env::consts::OS,
             std::env::consts::ARCH
         )
@@ -222,25 +222,25 @@ pub async fn perform_upgrade(version: &str) -> anyhow::Result<()> {
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
 
-    let tmp = tempfile::tempdir().context("创建临时目录失败")?;
+    let tmp = tempfile::tempdir().context("failed to create temp dir")?;
     let archive_path = tmp.path().join(&asset.archive_name);
     download_to(&client, &archive_url, &archive_path)
         .await
-        .context("下载发布产物失败")?;
+        .context("failed to download release archive")?;
 
-    // 校验 sha256
+    // verify sha256
     let sha_path = tmp.path().join(&sha_name);
     download_to(&client, &sha_url, &sha_path)
         .await
-        .context("下载校验文件失败")?;
+        .context("failed to download checksum file")?;
     let expected = parse_sha256_file(&std::fs::read_to_string(&sha_path)?)
-        .ok_or_else(|| anyhow!("无法解析校验文件 {sha_name}"))?;
+        .ok_or_else(|| anyhow!("could not parse checksum file {sha_name}"))?;
     let actual = sha256_hex(&archive_path)?;
     if actual != expected {
-        return Err(anyhow!("sha256 校验失败: 期望 {expected}, 实际 {actual}"));
+        return Err(anyhow!("sha256 mismatch: expected {expected}, got {actual}"));
     }
 
-    // 解压 + 替换
+    // extract + replace
     let new_binary = extract_binary(&archive_path, &asset, tmp.path())?;
     #[cfg(unix)]
     {
@@ -251,18 +251,18 @@ pub async fn perform_upgrade(version: &str) -> anyhow::Result<()> {
     // Resolve symlinks so we write to the real file on disk (e.g. brew installs
     // a symlink in /opt/homebrew/bin → Cellar/kfcode/X.Y.Z/bin/kfcode).
     let current_exe = std::env::current_exe()
-        .context("无法获取当前可执行文件路径")?;
+        .context("failed to determine current executable path")?;
     let target = std::fs::canonicalize(&current_exe)
         .unwrap_or(current_exe);
 
     // Atomic replace: write to a temp file beside the target, then rename.
     let tmp_target = target.with_extension("_kfcode_update");
     std::fs::copy(&new_binary, &tmp_target)
-        .map_err(|e| anyhow!("写入新二进制失败(可能无写权限): {e}"))?;
+        .map_err(|e| anyhow!("failed to write new binary (permission denied?): {e}"))?;
     std::fs::rename(&tmp_target, &target)
         .map_err(|e| {
             let _ = std::fs::remove_file(&tmp_target);
-            anyhow!("替换二进制失败: {e}")
+            anyhow!("failed to replace binary: {e}")
         })?;
     Ok(())
 }

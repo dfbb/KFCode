@@ -2511,16 +2511,16 @@ async fn handle_upgrade_command() -> anyhow::Result<()> {
     let current = env!("CARGO_PKG_VERSION");
     let latest = kfcode_util::upgrade_check::latest_version_cached()
         .await
-        .context("检查最新版本失败")?;
+        .context("failed to check latest version")?;
 
     if !kfcode_util::upgrade_check::is_newer(&latest, current) {
-        println!("已是最新版 {current}");
+        println!("already up to date ({current})");
         return Ok(());
     }
 
-    println!("发现新版本 {latest}（当前 {current}）,开始升级...");
+    println!("upgrading {current} → {latest}...");
     upgrade::perform_upgrade(&latest).await?;
-    println!("已从 {current} 升级到 {latest}");
+    println!("upgraded to {latest}");
     Ok(())
 }
 

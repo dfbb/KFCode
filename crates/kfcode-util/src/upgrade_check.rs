@@ -70,9 +70,9 @@ mod tests {
 
     #[test]
     fn not_newer_when_equal_or_older() {
-        assert!(!is_newer("0.1.1", "0.1.1")); // 相等
-        assert!(!is_newer("0.1.0", "0.1.1")); // 更旧
-        assert!(!is_newer("0.1.0", "0.2.0")); // 本地/开发版超前,不降级
+        assert!(!is_newer("0.1.1", "0.1.1")); // equal
+        assert!(!is_newer("0.1.0", "0.1.1")); // older
+        assert!(!is_newer("0.1.0", "0.2.0")); // local dev build ahead — must not downgrade
     }
 
     #[test]
@@ -148,10 +148,10 @@ mod cache_tests {
     #[test]
     fn staleness_thresholds() {
         let now = chrono::Utc::now().to_rfc3339();
-        assert!(!cache_is_stale(&now)); // 刚检查过,不过期
+        assert!(!cache_is_stale(&now)); // just checked — not stale
         let old = (chrono::Utc::now() - chrono::Duration::hours(25)).to_rfc3339();
-        assert!(cache_is_stale(&old)); // 超过 24h,过期
-        assert!(cache_is_stale("not-a-timestamp")); // 解析失败视为过期
+        assert!(cache_is_stale(&old)); // older than 24h — stale
+        assert!(cache_is_stale("not-a-timestamp")); // unparseable — treat as stale
     }
 }
 

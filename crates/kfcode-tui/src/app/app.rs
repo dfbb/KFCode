@@ -716,13 +716,13 @@ impl App {
                     self.sync_prompt_spinner_state();
                 }
                 CustomEvent::UpgradeAvailable(version) => {
-                    // 仅在用户空闲(输入框为空)时提示,否则丢弃,留待下次启动再提示。
+                    // Only show when the prompt is idle; otherwise discard and retry on next startup.
                     if self.prompt.get_input().is_empty() {
                         let current = env!("CARGO_PKG_VERSION");
                         self.toast.show(
                             ToastVariant::Info,
                             &format!(
-                                "有新版本 {version} 可用(当前 {current}),运行 kfcode upgrade 升级"
+                                "kfcode {version} available (current {current}) — run `kfcode upgrade`"
                             ),
                             6000,
                         );
@@ -3634,7 +3634,7 @@ fn spawn_upgrade_check(event_tx: Sender<Event>) {
         };
         let latest = match runtime.block_on(kfcode_util::upgrade_check::latest_version_cached()) {
             Ok(v) => v,
-            Err(_) => return, // 静默忽略
+            Err(_) => return, // silently ignore
         };
         let current = env!("CARGO_PKG_VERSION");
         if kfcode_util::upgrade_check::is_newer(&latest, current) {
