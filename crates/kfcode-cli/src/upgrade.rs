@@ -247,7 +247,22 @@ pub async fn perform_upgrade(version: &str) -> anyhow::Result<()> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&new_binary, std::fs::Permissions::from_mode(0o755))?;
     }
-    self_replace::self_replace(&new_binary)
-        .map_err(|e| anyhow!("替换当前二进制失败(可能无写权限,可改用包管理器升级,如 brew upgrade): {e}"))?;
+
+    // Resolve symlinks so we write to the real file on disk (e.g. brew installs
+    // a symlink in /opt/homebrew/bin → Cellar/kfcode/X.Y.Z/bin/kfcode).
+    let current_exe = std::env::current_exe()
+        .context("无法获取当前可执行文件路径")?;
+    let target = std::fs::canonicalize(&current_exe)
+        .unwrap_or(current_exe);
+
+    // Atomic replace: write to a temp file beside the target, then rename.
+    let tmp_target = target.with_extension("_kfcode_update");
+    std::fs::copy(&new_binary, &tmp_target)
+        .map_err(|e| anyhow!("写入新二进制失败(可能无写权限): {e}"))?;
+    std::fs::rename(&tmp_target, &target)
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_target);
+            anyhow!("替换二进制失败: {e}")
+        })?;
     Ok(())
 }
