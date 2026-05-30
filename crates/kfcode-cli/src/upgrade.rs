@@ -45,43 +45,6 @@ pub fn resolve_current_asset() -> Option<PlatformAsset> {
 use anyhow::{anyhow, Context};
 use std::path::{Path, PathBuf};
 
-/// One asset entry from the GitHub release JSON.
-struct ReleaseAsset {
-    name: String,
-    url: String,
-}
-
-/// Fetches the latest release JSON and returns its assets.
-async fn fetch_release_assets(client: &reqwest::Client) -> anyhow::Result<Vec<ReleaseAsset>> {
-    let url = format!(
-        "https://api.github.com/repos/{}/releases/latest",
-        kfcode_util::upgrade_check::RELEASE_REPO
-    );
-    let json: serde_json::Value = client
-        .get(url)
-        .header("User-Agent", "kfcode-cli")
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    let assets = json
-        .get("assets")
-        .and_then(|a| a.as_array())
-        .ok_or_else(|| anyhow!("release JSON missing assets array"))?;
-    let mut out = Vec::new();
-    for a in assets {
-        if let (Some(name), Some(url)) = (
-            a.get("name").and_then(|v| v.as_str()),
-            a.get("browser_download_url").and_then(|v| v.as_str()),
-        ) {
-            out.push(ReleaseAsset { name: name.to_string(), url: url.to_string() });
-        }
-    }
-    Ok(out)
-}
-
 /// Downloads `url` into `dest`.
 async fn download_to(client: &reqwest::Client, url: &str, dest: &Path) -> anyhow::Result<()> {
     let bytes = client
@@ -234,8 +197,11 @@ mod extract_tests {
 /// Downloads the latest release's binary for the current platform, verifies its
 /// sha256, and atomically replaces the running executable.
 ///
+/// `version` is the target version string without a leading `v` (e.g. `"0.1.2"`).
 /// Caller has already decided an upgrade is warranted (newer version available).
-pub async fn perform_upgrade() -> anyhow::Result<()> {
+/// Download URLs are constructed directly from the version + asset name, avoiding
+/// the GitHub REST API and its unauthenticated rate limit.
+pub async fn perform_upgrade(version: &str) -> anyhow::Result<()> {
     let asset = resolve_current_asset().ok_or_else(|| {
         anyhow!(
             "当前平台 {}-{} 无对应发布产物,无法自动升级",
@@ -244,32 +210,27 @@ pub async fn perform_upgrade() -> anyhow::Result<()> {
         )
     })?;
 
+    let base = format!(
+        "https://github.com/{}/releases/download/v{version}",
+        kfcode_util::upgrade_check::RELEASE_REPO
+    );
+    let archive_url = format!("{base}/{}", asset.archive_name);
+    let sha_name = format!("{}.sha256", asset.archive_name);
+    let sha_url = format!("{base}/{sha_name}");
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
 
-    let assets = fetch_release_assets(&client)
-        .await
-        .context("获取最新 Release 信息失败")?;
-    let archive_asset = assets
-        .iter()
-        .find(|a| a.name == asset.archive_name)
-        .ok_or_else(|| anyhow!("Release 中缺少本平台产物 {}", asset.archive_name))?;
-    let sha_name = format!("{}.sha256", asset.archive_name);
-    let sha_asset = assets
-        .iter()
-        .find(|a| a.name == sha_name)
-        .ok_or_else(|| anyhow!("Release 中缺少校验文件 {sha_name}"))?;
-
     let tmp = tempfile::tempdir().context("创建临时目录失败")?;
     let archive_path = tmp.path().join(&asset.archive_name);
-    download_to(&client, &archive_asset.url, &archive_path)
+    download_to(&client, &archive_url, &archive_path)
         .await
         .context("下载发布产物失败")?;
 
     // 校验 sha256
     let sha_path = tmp.path().join(&sha_name);
-    download_to(&client, &sha_asset.url, &sha_path)
+    download_to(&client, &sha_url, &sha_path)
         .await
         .context("下载校验文件失败")?;
     let expected = parse_sha256_file(&std::fs::read_to_string(&sha_path)?)

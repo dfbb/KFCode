@@ -166,22 +166,26 @@ pub const RELEASE_REPO: &str = "dfbb/KFCode";
 /// the silent startup check, or report it for the explicit `upgrade` command).
 #[cfg(feature = "upgrade-check")]
 pub async fn fetch_latest_version() -> anyhow::Result<String> {
-    let url = format!("https://api.github.com/repos/{RELEASE_REPO}/releases/latest");
+    // Follow the redirect from /releases/latest → /releases/tag/vX.Y.Z and
+    // extract the version from the final URL. This avoids the GitHub REST API
+    // entirely, so there is no rate limit for unauthenticated users.
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(4))
+        .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
     let resp = client
-        .get(url)
+        .get(format!("https://github.com/{RELEASE_REPO}/releases/latest"))
         .header("User-Agent", "kfcode-cli")
-        .header("Accept", "application/vnd.github+json")
         .send()
         .await?
         .error_for_status()?;
-    let json: serde_json::Value = resp.json().await?;
-    let tag = json
-        .get("tag_name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("release JSON missing tag_name"))?;
+    // Final URL is https://github.com/.../releases/tag/vX.Y.Z
+    let final_url = resp.url().to_string();
+    let tag = final_url
+        .rsplit('/')
+        .next()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("unexpected redirect URL: {final_url}"))?;
     Ok(tag.trim_start_matches('v').to_string())
 }
 

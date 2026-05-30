@@ -2519,7 +2519,7 @@ async fn handle_upgrade_command() -> anyhow::Result<()> {
     }
 
     println!("发现新版本 {latest}（当前 {current}）,开始升级...");
-    upgrade::perform_upgrade().await?;
+    upgrade::perform_upgrade(&latest).await?;
     println!("已从 {current} 升级到 {latest}");
     Ok(())
 }
